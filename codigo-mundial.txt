@@ -1,104 +1,63 @@
 import React, { useState } from 'react';
-import { Trophy, Shuffle, Play, RefreshCw, Shield, Award, Medal } from 'lucide-react';
+import { Trophy, Shuffle, Play, RefreshCw, Shield, Award, Medal, Globe } from 'lucide-react';
 
 // --- DATA & CONFIGURATION ---
 
-// Rankings FIFA actualizados (Nov/Dec 2025 - Estimado)
+// Helper para obtener URL de banderas (usando flagcdn)
+const getFlag = (iso) => iso ? `https://flagcdn.com/w40/${iso}.png` : null;
+
+// Rankings FIFA actualizados (Nov/Dec 2025 - Estimado) + Códigos ISO
 const TEAM_DATA = {
-  // Group A
-  'México': { rank: 15, code: 'MEX' },
-  'Sudáfrica': { rank: 61, code: 'RSA' },
-  'República de Corea': { rank: 22, code: 'KOR' },
-  'Ganador Playoff D (EUR)': { rank: 45, code: 'EUR-D' },
-  // Group B
-  'Canadá': { rank: 27, code: 'CAN' },
-  'Ganador Playoff A (EUR)': { rank: 40, code: 'EUR-A' },
-  'Catar': { rank: 51, code: 'QAT' },
-  'Suiza': { rank: 17, code: 'SUI' },
-  // Group C
-  'Brasil': { rank: 5, code: 'BRA' },
-  'Marruecos': { rank: 11, code: 'MAR' },
-  'Haití': { rank: 84, code: 'HAI' },
-  'Escocia': { rank: 36, code: 'SCO' },
-  // Group D
-  'Estados Unidos': { rank: 14, code: 'USA' },
-  'Paraguay': { rank: 39, code: 'PAR' },
-  'Australia': { rank: 26, code: 'AUS' },
-  'Ganador Playoff C (EUR)': { rank: 42, code: 'EUR-C' },
-  // Group E
-  'Alemania': { rank: 9, code: 'GER' },
-  'Curazao': { rank: 82, code: 'CUW' },
-  'Costa de Marfil': { rank: 42, code: 'CIV' },
-  'Ecuador': { rank: 23, code: 'ECU' },
-  // Group F
-  'Países Bajos': { rank: 7, code: 'NED' },
-  'Japón': { rank: 18, code: 'JPN' },
-  'Ganador Playoff D (EUR-2)': { rank: 46, code: 'EUR-D2' },
-  'Túnez': { rank: 40, code: 'TUN' },
-  // Group G
-  'Bélgica': { rank: 8, code: 'BEL' },
-  'Egipto': { rank: 34, code: 'EGY' },
-  'Irán': { rank: 20, code: 'IRN' },
-  'Nueva Zelanda': { rank: 86, code: 'NZL' },
-  // Group H
-  'España': { rank: 1, code: 'ESP' },
-  'Cabo Verde': { rank: 68, code: 'CPV' },
-  'Arabia Saudí': { rank: 60, code: 'KSA' },
-  'Uruguay': { rank: 16, code: 'URU' },
-  // Group I
-  'Francia': { rank: 3, code: 'FRA' },
-  'Senegal': { rank: 19, code: 'SEN' },
-  'Ganador Torneo 2': { rank: 65, code: 'PO-2' },
-  'Noruega': { rank: 29, code: 'NOR' },
-  // Group J
-  'Argentina': { rank: 2, code: 'ARG' },
-  'Argelia': { rank: 35, code: 'ALG' },
-  'Austria': { rank: 24, code: 'AUT' },
-  'Jordania': { rank: 66, code: 'JOR' },
-  // Group K
-  'Portugal': { rank: 6, code: 'POR' },
-  'Ganador Torneo 1': { rank: 64, code: 'PO-1' },
-  'Uzbekistán': { rank: 50, code: 'UZB' },
-  'Colombia': { rank: 13, code: 'COL' },
-  // Group L
-  'Inglaterra': { rank: 4, code: 'ENG' },
-  'Croacia': { rank: 10, code: 'CRO' },
-  'Ghana': { rank: 72, code: 'GHA' },
-  'Panamá': { rank: 30, code: 'PAN' },
+  // CLASIFICADOS DIRECTOS
+  'México': { rank: 15, iso: 'mx' }, 'Sudáfrica': { rank: 61, iso: 'za' }, 'República de Corea': { rank: 22, iso: 'kr' },
+  'Canadá': { rank: 27, iso: 'ca' }, 'Catar': { rank: 51, iso: 'qa' }, 'Suiza': { rank: 17, iso: 'ch' },
+  'Brasil': { rank: 5, iso: 'br' }, 'Marruecos': { rank: 11, iso: 'ma' }, 'Haití': { rank: 84, iso: 'ht' }, 'Escocia': { rank: 36, iso: 'gb-sct' },
+  'Estados Unidos': { rank: 14, iso: 'us' }, 'Paraguay': { rank: 39, iso: 'py' }, 'Australia': { rank: 26, iso: 'au' },
+  'Alemania': { rank: 9, iso: 'de' }, 'Curazao': { rank: 82, iso: 'cw' }, 'Costa de Marfil': { rank: 42, iso: 'ci' }, 'Ecuador': { rank: 23, iso: 'ec' },
+  'Países Bajos': { rank: 7, iso: 'nl' }, 'Japón': { rank: 18, iso: 'jp' }, 'Túnez': { rank: 40, iso: 'tn' },
+  'Bélgica': { rank: 8, iso: 'be' }, 'Egipto': { rank: 34, iso: 'eg' }, 'Irán': { rank: 20, iso: 'ir' }, 'Nueva Zelanda': { rank: 86, iso: 'nz' },
+  'España': { rank: 1, iso: 'es' }, 'Cabo Verde': { rank: 68, iso: 'cv' }, 'Arabia Saudí': { rank: 60, iso: 'sa' }, 'Uruguay': { rank: 16, iso: 'uy' },
+  'Francia': { rank: 3, iso: 'fr' }, 'Senegal': { rank: 19, iso: 'sn' }, 'Noruega': { rank: 29, iso: 'no' },
+  'Argentina': { rank: 2, iso: 'ar' }, 'Argelia': { rank: 35, iso: 'dz' }, 'Austria': { rank: 24, iso: 'at' }, 'Jordania': { rank: 66, iso: 'jo' },
+  'Portugal': { rank: 6, iso: 'pt' }, 'Uzbekistán': { rank: 50, iso: 'uz' }, 'Colombia': { rank: 13, iso: 'co' },
+  'Inglaterra': { rank: 4, iso: 'gb-eng' }, 'Croacia': { rank: 10, iso: 'hr' }, 'Ghana': { rank: 72, iso: 'gh' }, 'Panamá': { rank: 30, iso: 'pa' },
+
+  // EQUIPOS DE REPECHAJE
+  // UEFA A
+  'Italia': { rank: 9, iso: 'it' }, 'Gales': { rank: 32, iso: 'gb-wls' }, 'Bosnia': { rank: 75, iso: 'ba' }, 'Irlanda del Norte': { rank: 69, iso: 'gb-nir' },
+  // UEFA B
+  'Ucrania': { rank: 27, iso: 'ua' }, 'Polonia': { rank: 33, iso: 'pl' }, 'Suecia': { rank: 43, iso: 'se' }, 'Albania': { rank: 63, iso: 'al' },
+  // UEFA C
+  'Turquía': { rank: 26, iso: 'tr' }, 'Eslovaquia': { rank: 46, iso: 'sk' }, 'Rumania': { rank: 47, iso: 'ro' }, 'Kosovo': { rank: 84, iso: 'xk' },
+  // UEFA D
+  'Dinamarca': { rank: 21, iso: 'dk' }, 'Rep. Checa': { rank: 44, iso: 'cz' }, 'Irlanda': { rank: 62, iso: 'ie' }, 'Macedonia del Norte': { rank: 65, iso: 'mk' },
+  // INTERCONTINENTAL A
+  'RD Congo': { rank: 56, iso: 'cd' }, 'Jamaica': { rank: 70, iso: 'jm' }, 'Nueva Caledonia': { rank: 149, iso: 'nc' },
+  // INTERCONTINENTAL B
+  'Irak': { rank: 58, iso: 'iq' }, 'Bolivia': { rank: 76, iso: 'bo' }, 'Surinam': { rank: 123, iso: 'sr' }
 };
 
-const INITIAL_GROUPS = [
-  { name: 'A', teams: ['México', 'Sudáfrica', 'República de Corea', 'Ganador Playoff D (EUR)'] },
-  { name: 'B', teams: ['Canadá', 'Ganador Playoff A (EUR)', 'Catar', 'Suiza'] },
-  { name: 'C', teams: ['Brasil', 'Marruecos', 'Haití', 'Escocia'] },
-  { name: 'D', teams: ['Estados Unidos', 'Paraguay', 'Australia', 'Ganador Playoff C (EUR)'] },
-  { name: 'E', teams: ['Alemania', 'Curazao', 'Costa de Marfil', 'Ecuador'] },
-  { name: 'F', teams: ['Países Bajos', 'Japón', 'Ganador Playoff D (EUR-2)', 'Túnez'] },
-  { name: 'G', teams: ['Bélgica', 'Egipto', 'Irán', 'Nueva Zelanda'] },
-  { name: 'H', teams: ['España', 'Cabo Verde', 'Arabia Saudí', 'Uruguay'] },
-  { name: 'I', teams: ['Francia', 'Senegal', 'Ganador Torneo 2', 'Noruega'] },
-  { name: 'J', teams: ['Argentina', 'Argelia', 'Austria', 'Jordania'] },
-  { name: 'K', teams: ['Portugal', 'Ganador Torneo 1', 'Uzbekistán', 'Colombia'] },
-  { name: 'L', teams: ['Inglaterra', 'Croacia', 'Ghana', 'Panamá'] },
-];
+const PLAYOFF_STRUCTURE = {
+    uefa_a: { name: 'UEFA Playoff A', type: 'bracket', teams: ['Italia', 'Irlanda del Norte', 'Gales', 'Bosnia'] }, 
+    uefa_b: { name: 'UEFA Playoff B', type: 'bracket', teams: ['Ucrania', 'Albania', 'Polonia', 'Suecia'] },
+    uefa_c: { name: 'UEFA Playoff C', type: 'bracket', teams: ['Turquía', 'Kosovo', 'Rumania', 'Eslovaquia'] }, 
+    uefa_d: { name: 'UEFA Playoff D', type: 'bracket', teams: ['Dinamarca', 'Macedonia del Norte', 'Rep. Checa', 'Irlanda'] },
+    inter_a: { name: 'Repechaje Inter. A', type: 'ladder', teams: ['RD Congo', 'Jamaica', 'Nueva Caledonia'] }, 
+    inter_b: { name: 'Repechaje Inter. B', type: 'ladder', teams: ['Irak', 'Bolivia', 'Surinam'] }
+};
 
 const MODES = {
-  RANK: 'ranking',   // Ranking define todo
-  SURPRISE: 'surprise', // Probabilidad ponderada
-  RANDOM: 'random',  // 50/50
+  RANK: 'ranking',   
+  SURPRISE: 'surprise', 
+  RANDOM: 'random', 
 };
 
 // --- LOGIC HELPERS ---
 
-const simulateScore = (teamA, teamB, mode) => {
+const simulateMatch = (teamA, teamB, mode, cantDraw = false) => {
   const rankA = TEAM_DATA[teamA]?.rank || 50;
   const rankB = TEAM_DATA[teamB]?.rank || 50;
   
-  let scoreA = 0;
-  let scoreB = 0;
-  let winner = null;
-
-  // Probability of A winning
   let probA = 0.5;
 
   if (mode === MODES.RANK) {
@@ -107,55 +66,65 @@ const simulateScore = (teamA, teamB, mode) => {
     const diff = rankB - rankA; 
     probA = 0.5 + (diff / 150); 
     probA = Math.max(0.15, Math.min(0.85, probA));
-  } else {
-    probA = 0.5;
   }
 
+  let scoreA = 0, scoreB = 0;
   const rand = Math.random();
+
   if (rand < probA) {
-    winner = teamA;
     scoreA = Math.floor(Math.random() * 3) + 1; 
     scoreB = Math.floor(Math.random() * scoreA);
-  } else if (rand > probA + (mode === MODES.RANK ? 0 : 0.05)) { // Small draw margin for groups
-     winner = teamB;
-     scoreB = Math.floor(Math.random() * 3) + 1;
-     scoreA = Math.floor(Math.random() * scoreB);
-  } else {
-    winner = 'draw';
+  } else if (!cantDraw && rand > probA + (mode === MODES.RANK ? 0 : 0.05)) {
     const goals = Math.floor(Math.random() * 3);
-    scoreA = goals;
-    scoreB = goals;
+    scoreA = goals; scoreB = goals;
+  } else {
+    scoreB = Math.floor(Math.random() * 3) + 1;
+    scoreA = Math.floor(Math.random() * scoreB);
   }
 
-  // Override strict rank
+  if (cantDraw && scoreA === scoreB) {
+      if(mode === MODES.RANK) {
+          if(rankA < rankB) scoreA++; else scoreB++;
+      } else {
+          if(Math.random() > 0.5) scoreA++; else scoreB++;
+      }
+  }
+
   if (mode === MODES.RANK) {
-     if (rankA < rankB) { winner = teamA; scoreA=2; scoreB=0; }
-     else { winner = teamB; scoreB=2; scoreA=0; }
+     if (rankA < rankB) { scoreA=Math.max(scoreA, scoreB+1); scoreB=Math.min(scoreB, scoreA-1); }
+     else { scoreB=Math.max(scoreB, scoreA+1); scoreA=Math.min(scoreA, scoreB-1); }
   }
 
-  return { scoreA, scoreB, winner };
-};
-
-const resolveKnockout = (teamA, teamB, mode) => {
-    let res = simulateScore(teamA, teamB, mode);
-    // Ensure no draws
-    while(res.scoreA === res.scoreB) {
-        if(mode === MODES.RANK) {
-            // Lower rank wins penalties/extra time
-            if((TEAM_DATA[teamA]?.rank || 50) < (TEAM_DATA[teamB]?.rank || 50)) res.scoreA++;
-            else res.scoreB++;
-        } else {
-            // Random penales
-            if(Math.random() > 0.5) res.scoreA++; else res.scoreB++;
-        }
-    }
-    return {
-        ...res,
-        winner: res.scoreA > res.scoreB ? teamA : teamB
-    };
+  return { 
+      team1: teamA, team2: teamB, 
+      score1: scoreA, score2: scoreB, 
+      winner: scoreA > scoreB ? teamA : teamB 
+  };
 };
 
 // --- COMPONENTS ---
+
+const TeamWithFlag = ({ name, className }) => {
+    const iso = TEAM_DATA[name]?.iso;
+    return (
+        <div className={`flex items-center gap-2 ${className}`}>
+            {iso && <img src={getFlag(iso)} alt={name} className="w-5 h-3.5 shadow-sm object-cover rounded-[1px]" />}
+            <span className="truncate">{name}</span>
+        </div>
+    );
+};
+
+const MatchMini = ({ match }) => (
+    <div className="flex justify-between items-center text-xs py-1 border-b border-slate-100 last:border-0">
+        <div className={`flex-1 ${match.winner === match.team1 ? "font-bold text-slate-800" : "text-slate-500"}`}>
+            <TeamWithFlag name={match.team1} />
+        </div>
+        <div className="bg-slate-100 px-1 rounded text-slate-700 font-mono mx-2">{match.score1}-{match.score2}</div>
+        <div className={`flex-1 flex justify-end ${match.winner === match.team2 ? "font-bold text-slate-800" : "text-slate-500"}`}>
+            <TeamWithFlag name={match.team2} className="flex-row-reverse" />
+        </div>
+    </div>
+);
 
 const MatchCard = ({ match, isFinal }) => {
   if (!match) return null;
@@ -166,15 +135,15 @@ const MatchCard = ({ match, isFinal }) => {
          <span className="uppercase">{match.stadium}</span>
       </div>
       <div className="flex justify-between items-center mb-1">
-        <span className={`text-sm font-medium ${match.winner === match.team1 ? 'text-slate-900 font-bold' : 'text-slate-500'}`}>
-          {match.team1}
-        </span>
+        <div className={`flex items-center gap-2 text-sm font-medium ${match.winner === match.team1 ? 'text-slate-900 font-bold' : 'text-slate-500'}`}>
+            <TeamWithFlag name={match.team1} />
+        </div>
         <span className="bg-slate-100 px-2 py-0.5 rounded text-sm font-bold text-slate-800">{match.score1}</span>
       </div>
       <div className="flex justify-between items-center">
-        <span className={`text-sm font-medium ${match.winner === match.team2 ? 'text-slate-900 font-bold' : 'text-slate-500'}`}>
-          {match.team2}
-        </span>
+        <div className={`flex items-center gap-2 text-sm font-medium ${match.winner === match.team2 ? 'text-slate-900 font-bold' : 'text-slate-500'}`}>
+            <TeamWithFlag name={match.team2} />
+        </div>
         <span className="bg-slate-100 px-2 py-0.5 rounded text-sm font-bold text-slate-800">{match.score2}</span>
       </div>
     </div>
@@ -198,9 +167,11 @@ const GroupCard = ({ group, standings }) => (
           <tbody className="divide-y divide-slate-100">
             {standings.map((team, idx) => (
               <tr key={team.name} className={idx < 2 ? "bg-green-50/50" : (idx === 2 ? "bg-amber-50/30" : "")}>
-                <td className="px-3 py-2 font-medium text-slate-700 flex items-center gap-2">
-                   <span className="text-xs font-bold text-slate-400 w-4">{idx + 1}</span>
-                   {team.name}
+                <td className="px-3 py-2 font-medium text-slate-700">
+                   <div className="flex items-center gap-2">
+                     <span className="text-xs font-bold text-slate-400 w-4">{idx + 1}</span>
+                     <TeamWithFlag name={team.name} />
+                   </div>
                 </td>
                 <td className="px-2 py-2 text-center font-bold text-slate-800">{team.points}</td>
                 <td className="px-2 py-2 text-center text-slate-500">{team.gf - team.ga}</td>
@@ -215,40 +186,75 @@ const GroupCard = ({ group, standings }) => (
 export default function App() {
   const [simMode, setSimMode] = useState(MODES.RANK);
   const [simulation, setSimulation] = useState(null);
-  const [activeTab, setActiveTab] = useState('groups');
+  const [activeTab, setActiveTab] = useState('playoffs');
 
   const runSimulation = () => {
-    // 1. Group Stage
+    // 0. SIMULATE PLAYOFFS
+    let playoffResults = {};
+    let qualifiedTeams = {}; 
+
+    const runUefaBracket = (key, teams) => {
+        const semi1 = simulateMatch(teams[0], teams[3], simMode, true);
+        const semi2 = simulateMatch(teams[1], teams[2], simMode, true);
+        const final = simulateMatch(semi1.winner, semi2.winner, simMode, true);
+        playoffResults[key] = { name: PLAYOFF_STRUCTURE[key].name, matches: [semi1, semi2, final], winner: final.winner };
+        return final.winner;
+    };
+
+    const runInterLadder = (key, teams) => {
+        const semi = simulateMatch(teams[1], teams[2], simMode, true);
+        const final = simulateMatch(teams[0], semi.winner, simMode, true);
+        playoffResults[key] = { name: PLAYOFF_STRUCTURE[key].name, matches: [semi, final], winner: final.winner };
+        return final.winner;
+    };
+
+    qualifiedTeams['uefa_a'] = runUefaBracket('uefa_a', PLAYOFF_STRUCTURE.uefa_a.teams);
+    qualifiedTeams['uefa_b'] = runUefaBracket('uefa_b', PLAYOFF_STRUCTURE.uefa_b.teams);
+    qualifiedTeams['uefa_c'] = runUefaBracket('uefa_c', PLAYOFF_STRUCTURE.uefa_c.teams);
+    qualifiedTeams['uefa_d'] = runUefaBracket('uefa_d', PLAYOFF_STRUCTURE.uefa_d.teams);
+    qualifiedTeams['inter_a'] = runInterLadder('inter_a', PLAYOFF_STRUCTURE.inter_a.teams);
+    qualifiedTeams['inter_b'] = runInterLadder('inter_b', PLAYOFF_STRUCTURE.inter_b.teams);
+
+    // 1. CONSTRUCT GROUPS
+    const GROUPS = [
+        { name: 'A', teams: ['México', 'Sudáfrica', 'República de Corea', qualifiedTeams['uefa_d']] },
+        { name: 'B', teams: ['Canadá', qualifiedTeams['uefa_a'], 'Catar', 'Suiza'] },
+        { name: 'C', teams: ['Brasil', 'Marruecos', 'Haití', 'Escocia'] },
+        { name: 'D', teams: ['Estados Unidos', 'Paraguay', 'Australia', qualifiedTeams['uefa_c']] },
+        { name: 'E', teams: ['Alemania', 'Curazao', 'Costa de Marfil', 'Ecuador'] },
+        { name: 'F', teams: ['Países Bajos', 'Japón', qualifiedTeams['uefa_b'], 'Túnez'] },
+        { name: 'G', teams: ['Bélgica', 'Egipto', 'Irán', 'Nueva Zelanda'] },
+        { name: 'H', teams: ['España', 'Cabo Verde', 'Arabia Saudí', 'Uruguay'] },
+        { name: 'I', teams: ['Francia', 'Senegal', qualifiedTeams['inter_a'], 'Noruega'] },
+        { name: 'J', teams: ['Argentina', 'Argelia', 'Austria', 'Jordania'] },
+        { name: 'K', teams: ['Portugal', qualifiedTeams['inter_b'], 'Uzbekistán', 'Colombia'] },
+        { name: 'L', teams: ['Inglaterra', 'Croacia', 'Ghana', 'Panamá'] },
+    ];
+
+    // 2. GROUP STAGE SIM
     let groupResults = {};
-    INITIAL_GROUPS.forEach(g => {
+    GROUPS.forEach(g => {
       groupResults[g.name] = g.teams.map(t => ({
         name: t, points: 0, gf: 0, ga: 0, wins: 0, draws: 0, losses: 0, group: g.name
       }));
     });
 
-    INITIAL_GROUPS.forEach(g => {
+    GROUPS.forEach(g => {
       const teams = g.teams;
       for (let i = 0; i < teams.length; i++) {
         for (let j = i + 1; j < teams.length; j++) {
-          const t1 = teams[i];
-          const t2 = teams[j];
-          let result = simulateScore(t1, t2, simMode);
+          const t1 = teams[i]; const t2 = teams[j];
+          const result = simulateMatch(t1, t2, simMode, false);
           
           const stats1 = groupResults[g.name].find(t => t.name === t1);
           const stats2 = groupResults[g.name].find(t => t.name === t2);
 
-          stats1.gf += result.scoreA;
-          stats1.ga += result.scoreB;
-          stats2.gf += result.scoreB;
-          stats2.ga += result.scoreA;
+          stats1.gf += result.score1; stats1.ga += result.score2;
+          stats2.gf += result.score2; stats2.ga += result.score1;
 
-          if (result.scoreA > result.scoreB) {
-            stats1.points += 3; stats1.wins++; stats2.losses++;
-          } else if (result.scoreB > result.scoreA) {
-            stats2.points += 3; stats2.wins++; stats1.losses++;
-          } else {
-            stats1.points += 1; stats2.points += 1; stats1.draws++; stats2.draws++;
-          }
+          if (result.score1 > result.score2) { stats1.points += 3; stats1.wins++; stats2.losses++; }
+          else if (result.score2 > result.score1) { stats2.points += 3; stats2.wins++; stats1.losses++; }
+          else { stats1.points += 1; stats2.points += 1; stats1.draws++; stats2.draws++; }
         }
       }
       groupResults[g.name].sort((a, b) => {
@@ -257,49 +263,31 @@ export default function App() {
       });
     });
 
-    // 2. Qualifiers Helpers
+    // 3. QUALIFIERS LOGIC
     const getPos = (groupName, pos) => groupResults[groupName][pos - 1].name;
-    
-    // Get all 3rd places
     let thirdPlaces = [];
-    INITIAL_GROUPS.forEach(g => {
-      thirdPlaces.push({ ...groupResults[g.name][2], group: g.name });
-    });
-    // Sort best 3rd
+    GROUPS.forEach(g => thirdPlaces.push({ ...groupResults[g.name][2], group: g.name }));
     thirdPlaces.sort((a, b) => {
         if (b.points !== a.points) return b.points - a.points;
         return (b.gf - b.ga) - (a.gf - a.ga);
     });
     const best8Thirds = thirdPlaces.slice(0, 8);
     
-    // Helper to get a 3rd place team from specific allowed groups
-    // If none of allowed groups are in best8, pick first available best8 to avoid crash
+    let usedThirds = [];
     const get3rd = (allowedGroups, usedTeams) => {
-        const allowed = allowedGroups.split(''); // "ABC" -> ['A','B','C']
-        // Find best match in best8 that hasn't played
+        const allowed = allowedGroups.split('');
         let candidate = best8Thirds.find(t => allowed.includes(t.group) && !usedTeams.includes(t.name));
-        
-        // Fallback if strict logic fails (simple sim limitation)
-        if (!candidate) {
-            candidate = best8Thirds.find(t => !usedTeams.includes(t.name));
-        }
-        
-        if (candidate) {
-            usedTeams.push(candidate.name);
-            return candidate.name;
-        }
+        if (!candidate) candidate = best8Thirds.find(t => !usedTeams.includes(t.name));
+        if (candidate) { usedTeams.push(candidate.name); return candidate.name; }
         return "TBD"; 
     };
 
-    let usedThirds = [];
-
-    // --- 3. Round of 32 (16vos) ---
-    // Mapping Matches 73-88
+    // 4. FINAL STAGE FIXTURE
     const r32Defs = [
         { id: 73, t1: getPos('A', 2), t2: getPos('B', 2), stadium: 'LA Stadium' },
-        { id: 74, t1: getPos('E', 1), t2: get3rd('ABCD F', usedThirds), stadium: 'Boston' }, // Fixed space in string
+        { id: 74, t1: getPos('E', 1), t2: get3rd('ABCD F', usedThirds), stadium: 'Boston' },
         { id: 75, t1: getPos('F', 1), t2: getPos('C', 2), stadium: 'Monterrey' },
-        { id: 76, t1: getPos('C', 1), t2: getPos('F', 2), stadium: 'Houston' }, // Corrected 1E typo to 1C
+        { id: 76, t1: getPos('C', 1), t2: getPos('F', 2), stadium: 'Houston' },
         { id: 77, t1: getPos('I', 1), t2: get3rd('CD FGH', usedThirds), stadium: 'NY/NJ' },
         { id: 78, t1: getPos('E', 2), t2: getPos('I', 2), stadium: 'Dallas' },
         { id: 79, t1: getPos('A', 1), t2: get3rd('C E FHI', usedThirds), stadium: 'CDMX' },
@@ -315,23 +303,12 @@ export default function App() {
     ];
 
     let r32Matches = r32Defs.map(d => {
-        const res = resolveKnockout(d.t1, d.t2, simMode);
-        return { ...d, team1: d.t1, team2: d.t2, score1: res.scoreA, score2: res.scoreB, winner: res.winner };
+        const res = simulateMatch(d.t1, d.t2, simMode, true);
+        return { ...d, team1: d.t1, team2: d.t2, score1: res.score1, score2: res.score2, winner: res.winner };
     });
 
-    // Helper to find winner of match ID
     const getW = (id) => r32Matches.find(m => m.id === id).winner;
 
-    // --- 4. Round of 16 (Octavos) ---
-    // 89: W74 v W77
-    // 90: W73 v W75
-    // 91: W76 v W78
-    // 92: W79 v W80
-    // 93: W83 v W84
-    // 94: W81 v W82
-    // 95: W86 v W88
-    // 96: W85 v W87
-    
     const r16Defs = [
         { id: 89, t1: getW(74), t2: getW(77), stadium: 'Philadelphia' },
         { id: 90, t1: getW(73), t2: getW(75), stadium: 'Houston' },
@@ -344,17 +321,10 @@ export default function App() {
     ];
 
     let r16Matches = r16Defs.map(d => {
-        const res = resolveKnockout(d.t1, d.t2, simMode);
-        return { ...d, team1: d.t1, team2: d.t2, score1: res.scoreA, score2: res.scoreB, winner: res.winner };
+        const res = simulateMatch(d.t1, d.t2, simMode, true);
+        return { ...d, team1: d.t1, team2: d.t2, score1: res.score1, score2: res.score2, winner: res.winner };
     });
-
     const getW16 = (id) => r16Matches.find(m => m.id === id).winner;
-
-    // --- 5. Quarter Finals ---
-    // 97: W89 v W90
-    // 98: W93 v W94
-    // 99: W91 v W92
-    // 100: W95 v W96
 
     const qfDefs = [
         { id: 97, t1: getW16(89), t2: getW16(90), stadium: 'Boston' },
@@ -362,69 +332,35 @@ export default function App() {
         { id: 99, t1: getW16(91), t2: getW16(92), stadium: 'Miami' },
         { id: 100, t1: getW16(95), t2: getW16(96), stadium: 'Kansas City' },
     ];
-
     let qfMatches = qfDefs.map(d => {
-        const res = resolveKnockout(d.t1, d.t2, simMode);
-        return { ...d, team1: d.t1, team2: d.t2, score1: res.scoreA, score2: res.scoreB, winner: res.winner };
+        const res = simulateMatch(d.t1, d.t2, simMode, true);
+        return { ...d, team1: d.t1, team2: d.t2, score1: res.score1, score2: res.score2, winner: res.winner };
     });
-
     const getWQF = (id) => qfMatches.find(m => m.id === id).winner;
-    const getLQF = (id) => {
-        const m = qfMatches.find(x => x.id === id);
-        return m.winner === m.team1 ? m.team2 : m.team1;
-    } // Not used for 3rd place, usually losers of SF.
-
-    // --- 6. Semi Finals ---
-    // 101: W97 v W98
-    // 102: W99 v W100
 
     const sfDefs = [
         { id: 101, t1: getWQF(97), t2: getWQF(98), stadium: 'Dallas' },
         { id: 102, t1: getWQF(99), t2: getWQF(100), stadium: 'Atlanta' },
     ];
-
     let sfMatches = sfDefs.map(d => {
-        const res = resolveKnockout(d.t1, d.t2, simMode);
-        return { ...d, team1: d.t1, team2: d.t2, score1: res.scoreA, score2: res.scoreB, winner: res.winner, loser: res.winner === d.t1 ? d.t2 : d.t1 };
+        const res = simulateMatch(d.t1, d.t2, simMode, true);
+        return { ...d, team1: d.t1, team2: d.t2, score1: res.score1, score2: res.score2, winner: res.winner, loser: res.winner === d.t1 ? d.t2 : d.t1 };
     });
-
     const getWSF = (id) => sfMatches.find(m => m.id === id).winner;
     const getLSF = (id) => sfMatches.find(m => m.id === id).loser;
 
-    // --- 7. Third Place & Final ---
-    // 103: L101 v L102
-    // 104: W101 v W102
+    const thirdMatchRes = simulateMatch(getLSF(101), getLSF(102), simMode, true);
+    const thirdMatch = { id: 103, stage: '3er Puesto', stadium: 'Miami', team1: getLSF(101), team2: getLSF(102), score1: thirdMatchRes.score1, score2: thirdMatchRes.score2, winner: thirdMatchRes.winner };
 
-    const thirdMatchRes = resolveKnockout(getLSF(101), getLSF(102), simMode);
-    const thirdMatch = {
-        id: 103,
-        stage: '3er Puesto',
-        stadium: 'Miami',
-        team1: getLSF(101),
-        team2: getLSF(102),
-        score1: thirdMatchRes.scoreA,
-        score2: thirdMatchRes.scoreB,
-        winner: thirdMatchRes.winner
-    };
-
-    const finalMatchRes = resolveKnockout(getWSF(101), getWSF(102), simMode);
-    const finalMatch = {
-        id: 104,
-        stage: 'FINAL',
-        stadium: 'NY/NJ',
-        team1: getWSF(101),
-        team2: getWSF(102),
-        score1: finalMatchRes.scoreA,
-        score2: finalMatchRes.scoreB,
-        winner: finalMatchRes.winner
-    };
-
+    const finalMatchRes = simulateMatch(getWSF(101), getWSF(102), simMode, true);
+    const finalMatch = { id: 104, stage: 'FINAL', stadium: 'NY/NJ', team1: getWSF(101), team2: getWSF(102), score1: finalMatchRes.score1, score2: finalMatchRes.score2, winner: finalMatchRes.winner };
 
     setSimulation({
+      playoffs: playoffResults,
       groups: groupResults,
       bracket: { r32: r32Matches, r16: r16Matches, qf: qfMatches, sf: sfMatches, third: thirdMatch, final: finalMatch }
     });
-    setActiveTab('bracket');
+    setActiveTab('playoffs');
   };
 
   return (
@@ -436,7 +372,7 @@ export default function App() {
               <Trophy className="w-10 h-10 text-yellow-400" />
               <div>
                 <h1 className="text-2xl font-bold tracking-tight">Mundial 2026 Simulator</h1>
-                <p className="text-emerald-200 text-sm">48 Equipos | Fixture Oficial Actualizado</p>
+                <p className="text-emerald-200 text-sm">48 Equipos | Simulación Completa (Playoffs Incluidos)</p>
               </div>
             </div>
             <div className="flex bg-emerald-900/50 p-1 rounded-lg backdrop-blur-sm">
@@ -446,7 +382,7 @@ export default function App() {
             </div>
           </div>
           <div className="mt-6 flex justify-center">
-            <button onClick={runSimulation} className="bg-yellow-400 hover:bg-yellow-300 text-yellow-900 px-8 py-3 rounded-full font-bold shadow-lg transform hover:scale-105 transition-all flex items-center gap-2"><Play className="w-5 h-5" fill="currentColor" />{simulation ? 'Simular de Nuevo' : 'Comenzar Torneo'}</button>
+            <button onClick={runSimulation} className="bg-yellow-400 hover:bg-yellow-300 text-yellow-900 px-8 py-3 rounded-full font-bold shadow-lg transform hover:scale-105 transition-all flex items-center gap-2"><Play className="w-5 h-5" fill="currentColor" />{simulation ? 'Reiniciar Simulación' : 'Comenzar Torneo'}</button>
           </div>
         </div>
       </header>
@@ -461,15 +397,33 @@ export default function App() {
 
         {simulation && (
           <>
-            <div className="flex border-b border-slate-200 mb-6">
-              <button onClick={() => setActiveTab('groups')} className={`px-6 py-3 font-medium text-sm transition-colors ${activeTab === 'groups' ? 'border-b-2 border-emerald-600 text-emerald-700' : 'text-slate-500 hover:text-slate-700'}`}>Fase de Grupos</button>
-              <button onClick={() => setActiveTab('bracket')} className={`px-6 py-3 font-medium text-sm transition-colors ${activeTab === 'bracket' ? 'border-b-2 border-emerald-600 text-emerald-700' : 'text-slate-500 hover:text-slate-700'}`}>Fase Final</button>
+            <div className="flex border-b border-slate-200 mb-6 overflow-x-auto">
+              <button onClick={() => setActiveTab('playoffs')} className={`px-6 py-3 font-medium text-sm transition-colors whitespace-nowrap ${activeTab === 'playoffs' ? 'border-b-2 border-emerald-600 text-emerald-700' : 'text-slate-500 hover:text-slate-700'}`}>Repechajes y Clasificación</button>
+              <button onClick={() => setActiveTab('groups')} className={`px-6 py-3 font-medium text-sm transition-colors whitespace-nowrap ${activeTab === 'groups' ? 'border-b-2 border-emerald-600 text-emerald-700' : 'text-slate-500 hover:text-slate-700'}`}>Fase de Grupos</button>
+              <button onClick={() => setActiveTab('bracket')} className={`px-6 py-3 font-medium text-sm transition-colors whitespace-nowrap ${activeTab === 'bracket' ? 'border-b-2 border-emerald-600 text-emerald-700' : 'text-slate-500 hover:text-slate-700'}`}>Fase Final</button>
             </div>
+
+            {activeTab === 'playoffs' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-fadeIn">
+                    {Object.values(simulation.playoffs).map((p, idx) => (
+                        <div key={idx} className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+                            <h3 className="font-bold text-slate-800 mb-3 flex items-center gap-2"><Globe className="w-4 h-4 text-emerald-600"/> {p.name}</h3>
+                            <div className="space-y-2 mb-3">
+                                {p.matches.map((m, midx) => <MatchMini key={midx} match={m} />)}
+                            </div>
+                            <div className="bg-emerald-50 text-emerald-800 p-2 rounded text-center text-sm font-bold border border-emerald-100 flex justify-center items-center gap-2">
+                                <span>Clasificado:</span>
+                                <TeamWithFlag name={p.winner} />
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
 
             {activeTab === 'groups' && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-fadeIn">
-                {INITIAL_GROUPS.map(g => (
-                  <GroupCard key={g.name} group={g} standings={simulation.groups[g.name]} />
+                {simulation.groups && Object.keys(simulation.groups).map(g => (
+                  <GroupCard key={g} group={{name: g}} standings={simulation.groups[g]} />
                 ))}
               </div>
             )}
@@ -478,9 +432,11 @@ export default function App() {
               <div className="space-y-12 animate-fadeIn pb-20">
                 <div className="bg-gradient-to-r from-yellow-100 to-amber-100 border border-yellow-200 rounded-2xl p-8 text-center shadow-sm">
                   <h2 className="text-amber-800 text-sm font-bold uppercase tracking-widest mb-2">Campeón del Mundo 2026</h2>
-                  <div className="text-4xl md:text-6xl font-black text-slate-900 flex items-center justify-center gap-4">
+                  <div className="flex flex-col items-center justify-center gap-2">
                     <Award className="w-12 h-12 md:w-16 md:h-16 text-yellow-500" />
-                    {simulation.bracket.final.winner}
+                    <div className="text-4xl md:text-6xl font-black text-slate-900 flex items-center gap-4">
+                       <TeamWithFlag name={simulation.bracket.final.winner} className="text-4xl md:text-6xl" />
+                    </div>
                   </div>
                 </div>
 
