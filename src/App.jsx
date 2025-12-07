@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Trophy, Shuffle, Play, RefreshCw, Shield, Award, Medal, Globe, Download, MousePointerClick, CheckCircle2, Pencil, ChevronDown, X, Share2 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Trophy, Shuffle, Play, RefreshCw, Shield, Award, Medal, Globe, Download, MousePointerClick, CheckCircle2, Pencil, ChevronDown, X } from 'lucide-react';
 
 // --- DATA & CONFIGURATION ---
 
@@ -30,28 +30,28 @@ const TEAM_DATA = {
 };
 
 const PLAYOFF_STRUCTURE = {
-    uefa_a: { name: 'UEFA Playoff A', type: 'bracket', teams: ['Italia', 'Irlanda del Norte', 'Gales', 'Bosnia'] }, 
-    uefa_b: { name: 'UEFA Playoff B', type: 'bracket', teams: ['Ucrania', 'Albania', 'Polonia', 'Suecia'] },
-    uefa_c: { name: 'UEFA Playoff C', type: 'bracket', teams: ['Turquía', 'Kosovo', 'Rumania', 'Eslovaquia'] }, 
-    uefa_d: { name: 'UEFA Playoff D', type: 'bracket', teams: ['Dinamarca', 'Macedonia del Norte', 'Rep. Checa', 'Irlanda'] },
-    inter_a: { name: 'Repechaje Inter. A', type: 'ladder', teams: ['RD Congo', 'Jamaica', 'Nueva Caledonia'] }, 
-    inter_b: { name: 'Repechaje Inter. B', type: 'ladder', teams: ['Irak', 'Bolivia', 'Surinam'] }
+    uefa_a: { name: 'UEFA Playoff A', type: 'bracket', teams: ['Italia', 'Irlanda del Norte', 'Gales', 'Bosnia'], targetGroup: 'B' }, 
+    uefa_b: { name: 'UEFA Playoff B', type: 'bracket', teams: ['Ucrania', 'Albania', 'Polonia', 'Suecia'], targetGroup: 'F' },
+    uefa_c: { name: 'UEFA Playoff C', type: 'bracket', teams: ['Turquía', 'Kosovo', 'Rumania', 'Eslovaquia'], targetGroup: 'D' }, 
+    uefa_d: { name: 'UEFA Playoff D', type: 'bracket', teams: ['Dinamarca', 'Macedonia del Norte', 'Rep. Checa', 'Irlanda'], targetGroup: 'A' },
+    inter_a: { name: 'Repechaje Inter. A', type: 'ladder', teams: ['RD Congo', 'Jamaica', 'Nueva Caledonia'], targetGroup: 'I' }, 
+    inter_b: { name: 'Repechaje Inter. B', type: 'ladder', teams: ['Irak', 'Bolivia', 'Surinam'], targetGroup: 'K' }
 };
 
 const MODES = { RANK: 'ranking', SURPRISE: 'surprise', RANDOM: 'random', MANUAL: 'manual' };
 
 const NEXT_MATCH_MAP = {
-    74: { next: 89, slot: 'team1' }, 77: { next: 89, slot: 'team2' },
     73: { next: 90, slot: 'team1' }, 75: { next: 90, slot: 'team2' },
+    74: { next: 89, slot: 'team1' }, 77: { next: 89, slot: 'team2' },
     76: { next: 91, slot: 'team1' }, 78: { next: 91, slot: 'team2' },
     79: { next: 92, slot: 'team1' }, 80: { next: 92, slot: 'team2' },
-    83: { next: 93, slot: 'team1' }, 84: { next: 93, slot: 'team2' },
     81: { next: 94, slot: 'team1' }, 82: { next: 94, slot: 'team2' },
-    86: { next: 95, slot: 'team1' }, 88: { next: 95, slot: 'team2' },
+    83: { next: 93, slot: 'team1' }, 84: { next: 93, slot: 'team2' },
     85: { next: 96, slot: 'team1' }, 87: { next: 96, slot: 'team2' },
+    86: { next: 95, slot: 'team1' }, 88: { next: 95, slot: 'team2' },
     89: { next: 97, slot: 'team1' }, 90: { next: 97, slot: 'team2' },
-    93: { next: 98, slot: 'team1' }, 94: { next: 98, slot: 'team2' },
     91: { next: 99, slot: 'team1' }, 92: { next: 99, slot: 'team2' },
+    93: { next: 98, slot: 'team1' }, 94: { next: 98, slot: 'team2' },
     95: { next: 100, slot: 'team1' }, 96: { next: 100, slot: 'team2' },
     97: { next: 101, slot: 'team1' }, 98: { next: 101, slot: 'team2' },
     99: { next: 102, slot: 'team1' }, 100: { next: 102, slot: 'team2' },
@@ -59,41 +59,36 @@ const NEXT_MATCH_MAP = {
     102: { next: 104, slot: 'team2', loserNext: 103, loserSlot: 'team2' },
 };
 
-// --- LOGIC HELPERS ---
-
 const simulateMatch = (teamA, teamB, mode, cantDraw = false) => {
+  // If teams are not defined in manual mode, return placeholders
   if (!teamA || !teamB) return { team1: teamA, team2: teamB, score1: '', score2: '', winner: null };
 
   const rankA = TEAM_DATA[teamA]?.rank || 50;
   const rankB = TEAM_DATA[teamB]?.rank || 50;
-  
   const effectiveMode = mode === MODES.MANUAL ? MODES.RANK : mode;
-
+  
   let probA = 0.5;
   if (effectiveMode === MODES.RANK) probA = rankA < rankB ? 1 : 0;
   else if (effectiveMode === MODES.SURPRISE) probA = Math.max(0.15, Math.min(0.85, 0.5 + ((rankB - rankA) / 150)));
-
+  
   let scoreA = 0, scoreB = 0;
   const rand = Math.random();
-
   if (rand < probA) { scoreA = Math.floor(Math.random() * 3) + 1; scoreB = Math.floor(Math.random() * scoreA); } 
   else if (!cantDraw && rand > probA + (effectiveMode === MODES.RANK ? 0 : 0.05)) { const g = Math.floor(Math.random() * 3); scoreA = g; scoreB = g; } 
   else { scoreB = Math.floor(Math.random() * 3) + 1; scoreA = Math.floor(Math.random() * scoreB); }
-
+  
   if (cantDraw && scoreA === scoreB) {
       if(effectiveMode === MODES.RANK) (rankA < rankB) ? scoreA++ : scoreB++;
       else (Math.random() > 0.5) ? scoreA++ : scoreB++;
   }
-
+  
   if (effectiveMode === MODES.RANK) {
      if (rankA < rankB) { scoreA=Math.max(scoreA, scoreB+1); scoreB=Math.min(scoreB, scoreA-1); }
      else { scoreB=Math.max(scoreB, scoreA+1); scoreA=Math.min(scoreA, scoreB-1); }
   }
-
+  
   return { team1: teamA, team2: teamB, score1: scoreA, score2: scoreB, winner: scoreA > scoreB ? teamA : teamB };
 };
-
-// --- COMPONENTS ---
 
 const TeamWithFlag = ({ name, className, big }) => {
     const iso = TEAM_DATA[name]?.iso;
@@ -105,21 +100,31 @@ const TeamWithFlag = ({ name, className, big }) => {
     );
 };
 
-const MatchMini = ({ match }) => (
-    <div className="flex justify-between items-center text-xs py-1 border-b border-slate-100 last:border-0">
-        <div className={`flex-1 ${match.winner === match.team1 ? "font-bold text-slate-800" : "text-slate-500"}`}>
-            <TeamWithFlag name={match.team1} />
+const MatchMini = ({ match, onPick, isManual }) => {
+    const canPick = isManual && match.team1 && match.team2 && !match.winner;
+    return (
+        <div className="flex justify-between items-center text-xs py-1 border-b border-slate-100 last:border-0">
+            <div 
+                className={`flex-1 flex items-center gap-2 cursor-pointer p-1 rounded ${match.winner === match.team1 ? "font-bold text-slate-900 bg-emerald-50" : "text-slate-500 hover:bg-slate-50"}`}
+                onClick={() => isManual && onPick && onPick(match.id, match.team1)}
+            >
+                <TeamWithFlag name={match.team1} />
+            </div>
+            <div className="bg-slate-100 px-1 rounded text-slate-700 font-mono mx-2 min-w-[30px] text-center">
+                {match.score1}-{match.score2}
+            </div>
+            <div 
+                className={`flex-1 flex justify-end items-center gap-2 cursor-pointer p-1 rounded ${match.winner === match.team2 ? "font-bold text-slate-900 bg-emerald-50" : "text-slate-500 hover:bg-slate-50"}`}
+                onClick={() => isManual && onPick && onPick(match.id, match.team2)}
+            >
+                <TeamWithFlag name={match.team2} className="flex-row-reverse" />
+            </div>
         </div>
-        <div className="bg-slate-100 px-1 rounded text-slate-700 font-mono mx-2">{match.score1}-{match.score2}</div>
-        <div className={`flex-1 flex justify-end ${match.winner === match.team2 ? "font-bold text-slate-800" : "text-slate-500"}`}>
-            <TeamWithFlag name={match.team2} className="flex-row-reverse" />
-        </div>
-    </div>
-);
+    );
+};
 
 const InteractiveMatchCard = ({ match, isFinal, onPick, onSelectTeam, isManual, selectedTeams = [] }) => {
   if (!match) return null;
-  
   const showSelector1 = isManual && match.source1 && !match.team1;
   const showSelector2 = isManual && match.source2 && !match.team2;
   const canPickWinner = match.team1 && match.team2;
@@ -136,83 +141,57 @@ const InteractiveMatchCard = ({ match, isFinal, onPick, onSelectTeam, isManual, 
          <span className="uppercase truncate max-w-[120px]">{match.stadium}</span>
       </div>
 
-      {/* Team 1 Area */}
       {showSelector1 ? (
          <div className="mb-1">
              <div className="text-[10px] text-slate-400 uppercase font-bold mb-0.5">{match.label1 || 'Equipo 1'}</div>
              <div className="relative">
                 <select 
                     className="w-full text-sm p-1 pr-6 border border-slate-300 rounded appearance-none bg-slate-50 focus:border-emerald-500 focus:outline-none"
-                    onChange={(e) => onSelectTeam(match.id, 'team1', e.target.value)}
-                    value=""
-                >
+                    onChange={(e) => onSelectTeam(match.id, 'team1', e.target.value)} value="">
                     <option value="" disabled>Seleccionar...</option>
                     {match.source1.map(t => {
                         const isDisabled = selectedTeams.includes(t) && t !== match.team1;
-                        return (
-                            <option key={t} value={t} disabled={isDisabled}>
-                                {t} {isDisabled ? '(Ya elegido)' : ''}
-                            </option>
-                        );
+                        return <option key={t} value={t} disabled={isDisabled}>{t} {isDisabled ? '(Ya elegido)' : ''}</option>;
                     })}
                 </select>
                 <ChevronDown className="w-3 h-3 text-slate-400 absolute right-2 top-2 pointer-events-none"/>
              </div>
          </div>
       ) : (
-        <div 
-            onClick={() => isManual && canPickWinner && onPick(match.id, match.team1)}
-            className={`flex justify-between items-center mb-1 p-1 rounded cursor-pointer transition-colors
-                ${match.winner === match.team1 ? 'bg-emerald-50' : (isManual && canPickWinner ? 'hover:bg-slate-50' : '')}
-            `}
-        >
+        <div onClick={() => isManual && canPickWinner && onPick(match.id, match.team1)}
+            className={`flex justify-between items-center mb-1 p-1 rounded cursor-pointer transition-colors ${match.winner === match.team1 ? 'bg-emerald-50' : (isManual && canPickWinner ? 'hover:bg-slate-50' : '')}`}>
             <div className={`flex items-center gap-2 text-sm font-medium ${match.winner === match.team1 ? 'text-slate-900 font-bold' : 'text-slate-500'}`}>
                 <TeamWithFlag name={match.team1} />
                 {isManual && match.winner === match.team1 && <CheckCircle2 className="w-4 h-4 text-emerald-600" />}
             </div>
-            <span className={`px-2 py-0.5 rounded text-sm font-bold ${match.winner === match.team1 ? 'bg-emerald-200 text-emerald-900' : 'bg-slate-100 text-slate-800'}`}>
-                {match.score1}
-            </span>
+            <span className={`px-2 py-0.5 rounded text-sm font-bold ${match.winner === match.team1 ? 'bg-emerald-200 text-emerald-900' : 'bg-slate-100 text-slate-800'}`}>{match.score1}</span>
         </div>
       )}
 
-      {/* Team 2 Area */}
       {showSelector2 ? (
          <div>
              <div className="text-[10px] text-slate-400 uppercase font-bold mb-0.5">{match.label2 || 'Equipo 2'}</div>
              <div className="relative">
                 <select 
                     className="w-full text-sm p-1 pr-6 border border-slate-300 rounded appearance-none bg-slate-50 focus:border-emerald-500 focus:outline-none"
-                    onChange={(e) => onSelectTeam(match.id, 'team2', e.target.value)}
-                    value=""
-                >
+                    onChange={(e) => onSelectTeam(match.id, 'team2', e.target.value)} value="">
                     <option value="" disabled>Seleccionar...</option>
                     {match.source2.map(t => {
                         const isDisabled = selectedTeams.includes(t) && t !== match.team2;
-                        return (
-                            <option key={t} value={t} disabled={isDisabled}>
-                                {t} {isDisabled ? '(Ya elegido)' : ''}
-                            </option>
-                        );
+                        return <option key={t} value={t} disabled={isDisabled}>{t} {isDisabled ? '(Ya elegido)' : ''}</option>;
                     })}
                 </select>
                 <ChevronDown className="w-3 h-3 text-slate-400 absolute right-2 top-2 pointer-events-none"/>
              </div>
          </div>
       ) : (
-        <div 
-            onClick={() => isManual && canPickWinner && onPick(match.id, match.team2)}
-            className={`flex justify-between items-center p-1 rounded cursor-pointer transition-colors
-                ${match.winner === match.team2 ? 'bg-emerald-50' : (isManual && canPickWinner ? 'hover:bg-slate-50' : '')}
-            `}
-        >
+        <div onClick={() => isManual && canPickWinner && onPick(match.id, match.team2)}
+            className={`flex justify-between items-center p-1 rounded cursor-pointer transition-colors ${match.winner === match.team2 ? 'bg-emerald-50' : (isManual && canPickWinner ? 'hover:bg-slate-50' : '')}`}>
             <div className={`flex items-center gap-2 text-sm font-medium ${match.winner === match.team2 ? 'text-slate-900 font-bold' : 'text-slate-500'}`}>
                 <TeamWithFlag name={match.team2} />
                 {isManual && match.winner === match.team2 && <CheckCircle2 className="w-4 h-4 text-emerald-600" />}
             </div>
-            <span className={`px-2 py-0.5 rounded text-sm font-bold ${match.winner === match.team2 ? 'bg-emerald-200 text-emerald-900' : 'bg-slate-100 text-slate-800'}`}>
-                {match.score2}
-            </span>
+            <span className={`px-2 py-0.5 rounded text-sm font-bold ${match.winner === match.team2 ? 'bg-emerald-200 text-emerald-900' : 'bg-slate-100 text-slate-800'}`}>{match.score2}</span>
         </div>
       )}
       
@@ -243,10 +222,7 @@ const GroupCard = ({ group, standings }) => (
             {standings.map((team, idx) => (
               <tr key={team.name} className={idx < 2 ? "bg-green-50/50" : (idx === 2 ? "bg-amber-50/30" : "")}>
                 <td className="px-3 py-2 font-medium text-slate-700">
-                   <div className="flex items-center gap-2">
-                     <span className="text-xs font-bold text-slate-400 w-4">{idx + 1}</span>
-                     <TeamWithFlag name={team.name} />
-                   </div>
+                   <div className="flex items-center gap-2"><span className="text-xs font-bold text-slate-400 w-4">{idx + 1}</span><TeamWithFlag name={team.name} /></div>
                 </td>
                 <td className="px-2 py-2 text-center font-bold text-slate-800">{team.points}</td>
                 <td className="px-2 py-2 text-center text-slate-500">{team.gf - team.ga}</td>
@@ -264,6 +240,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('playoffs');
   const [isManualMode, setIsManualMode] = useState(false);
   const [manualBracket, setManualBracket] = useState({}); 
+  const [manualPlayoffs, setManualPlayoffs] = useState({});
   const [showWinnerPopup, setShowWinnerPopup] = useState(false);
 
   useEffect(() => {
@@ -278,85 +255,202 @@ export default function App() {
     if (!window.html2canvas) { alert("Cargando librería..."); return; }
     const element = document.getElementById('bracket-export');
     window.html2canvas(element, { 
-        backgroundColor: "#ffffff", 
-        scale: 2,
-        useCORS: true
+        backgroundColor: "#ffffff", // Fondo blanco sólido
+        scale: 2, 
+        useCORS: true 
     }).then(canvas => {
         const link = document.createElement('a');
-        link.download = `Mundial2026_Pronostico.png`;
-        link.href = canvas.toDataURL();
+        link.download = `Mundial2026_Pronostico.jpg`; // JPG para asegurar fondo
+        link.href = canvas.toDataURL("image/jpeg", 0.9);
         link.click();
     });
   };
 
+  // --- TRAVERSAL HELPERS ---
+  const getBracketMatch = (bracket, id) => {
+      for (const k of ['r32', 'r16', 'qf', 'sf', 'final']) {
+          const m = bracket[k].find(x => x.id === id);
+          if (m) return m;
+      }
+      if (bracket.third.id === id) return bracket.third;
+      return null;
+  };
+
+  const clearFutureRounds = (bracket, matchId) => {
+      const mapInfo = NEXT_MATCH_MAP[matchId];
+      if (mapInfo) {
+          const nextMatch = getBracketMatch(bracket, mapInfo.next);
+          if (nextMatch) {
+              nextMatch[mapInfo.slot] = null;
+              nextMatch.winner = null;
+              nextMatch.score1 = ''; nextMatch.score2 = '';
+              clearFutureRounds(bracket, nextMatch.id);
+          }
+          if (mapInfo.loserNext) {
+              const thirdMatch = bracket.third;
+              if (thirdMatch && thirdMatch.id === mapInfo.loserNext) {
+                  thirdMatch[mapInfo.loserSlot] = null;
+                  thirdMatch.winner = null;
+                  thirdMatch.score1 = ''; thirdMatch.score2 = '';
+              }
+          }
+      }
+  };
+
+  // --- MANUAL HANDLERS ---
+
+  const handleManualPlayoffPick = (bracketKey, matchId, winnerName) => {
+      if (!isManualMode) return;
+      const newPlayoffs = JSON.parse(JSON.stringify(manualPlayoffs));
+      const pBracket = newPlayoffs[bracketKey];
+      const match = pBracket.matches.find(m => (m.team1 + m.team2) === matchId || (m.team1 === matchId) || (m.team2 === matchId)); // loose id match as matches don't have unique IDs in playoffs structure initially, let's assume index or create logic
+      // Actually matches in playoffs array don't have IDs. We need to find by teams.
+      // Re-finding strategy:
+      const matchIdx = pBracket.matches.findIndex(m => m.team1 === matchId || m.team2 === matchId || (m.team1 && m.team2 && (m.team1 + '-' + m.team2) === matchId));
+      
+      // Better approach: Assign IDs to playoff matches in manual mode init.
+      // Let's assume we pass the match OBJECT index in the array from the UI for simplicity
+      // Or just pass the match object ref? No, deep copy invalidates ref.
+      // Let's look at `MatchMini` implementation inside `playoffs` map.
+  };
+  
+  // Revised Playoff Pick Logic inside component map
+  const executePlayoffPick = (bracketKey, matchIndex, winner) => {
+      const newPlayoffs = JSON.parse(JSON.stringify(manualPlayoffs));
+      const match = newPlayoffs[bracketKey].matches[matchIndex];
+      match.winner = winner;
+      if (winner === match.team1) { match.score1 = '✔'; match.score2 = ''; } else { match.score1 = ''; match.score2 = '✔'; }
+      
+      // Propagate in Bracket/Ladder
+      // Bracket: 0 (semi1), 1 (semi2) -> 2 (final)
+      // Ladder: 0 (semi), 1 (final)
+      if (PLAYOFF_STRUCTURE[bracketKey].type === 'bracket') {
+          if (matchIndex === 0) newPlayoffs[bracketKey].matches[2].team1 = winner;
+          if (matchIndex === 1) newPlayoffs[bracketKey].matches[2].team2 = winner;
+          if (matchIndex === 2) newPlayoffs[bracketKey].winner = winner; // Champ
+      } else {
+          // Ladder: [seed, semi1, semi2] inputs. 
+          // Match 0 is Semi (teams[1] v teams[2]). Match 1 is Final (teams[0] v Winner 0)
+          if (matchIndex === 0) newPlayoffs[bracketKey].matches[1].team2 = winner;
+          if (matchIndex === 1) newPlayoffs[bracketKey].winner = winner;
+      }
+      
+      setManualPlayoffs(newPlayoffs);
+      
+      // Trigger update of R32 sources based on new winner?
+      // R32 sources are derived from `getGroupTeams`. `getGroupTeams` uses `GROUPS` constant.
+      // We need to make `GROUPS` reactive to `manualPlayoffs`.
+      updateR32Sources(newPlayoffs);
+  };
+
+  const updateR32Sources = (currentPlayoffs) => {
+      // Reconstruct Groups based on new playoff winners
+      const dynamicGroups = getGroupsWithWinners(currentPlayoffs);
+      
+      // Update manual bracket sources
+      const newBracket = JSON.parse(JSON.stringify(manualBracket));
+      
+      // Helper
+      const getGTeams = (gName) => dynamicGroups.find(g => g.name === gName)?.teams || [];
+      const getMTeams = (str) => {
+          let t = []; str.split('').forEach(k => t.push(...getGTeams(k))); return t;
+      };
+
+      if (newBracket.r32) {
+          newBracket.r32.forEach(m => {
+              if (m.source1) {
+                  // Re-evaluate source based on match definition. We need to know original definition.
+                  // We lost the 'g' and 't' (type) in previous map. Let's persist them in data.
+                  // Quick fix: Re-map using original structure logic if available, or just update known placeholders?
+                  // Better: Re-run r32 generation logic but keep selected teams if valid.
+                  // Or, just update the source arrays in place.
+                  // We need to know which group corresponds to which match.
+                  // Let's rely on stored labels/ids to reverse engineer or store metadata.
+                  // Storing metadata in r32 objects is best.
+              }
+          });
+      }
+      // Since managing deep update is complex, simpler is: user picks playoff winner -> it replaces placeholder in dropdown list.
+      // We will re-generate `manualBracket`'s sources in the render or via effect, but keep selections.
+      // Actually, we can just update `manualBracket` state with new sources.
+      
+      // Let's refresh sources
+      // We need the original definitions to know which groups to pull from.
+      // We'll add metadata to r32Matches in initialization.
+      
+      setManualBracket(prev => {
+          const next = { ...prev };
+          next.r32 = next.r32.map(m => {
+              if (!m.meta) return m; // Should have meta
+              const s1 = m.meta.s1.t === '3rd' ? getMTeams(m.meta.s1.g.replace(' ','')) : getGTeams(m.meta.s1.g);
+              const s2 = m.meta.s2.t === '3rd' ? getMTeams(m.meta.s2.g.replace(' ','')) : getGTeams(m.meta.s2.g);
+              
+              // If current selection is no longer in source (e.g. placeholder changed to real team), keep it? 
+              // No, if placeholder "Winner A" becomes "Wales", we should probably reset or auto-select Wales if it was selected?
+              // Let's just update sources.
+              return { ...m, source1: s1, source2: s2 };
+          });
+          return next;
+      });
+  };
+
+  const getGroupsWithWinners = (playoffsState) => {
+      // Helper to safely get winner or placeholder
+      const getW = (key) => playoffsState[key]?.winner || `Ganador ${PLAYOFF_STRUCTURE[key].name}`;
+      return [
+        { name: 'A', teams: ['México', 'Sudáfrica', 'República de Corea', getW('uefa_d')] },
+        { name: 'B', teams: ['Canadá', getW('uefa_a'), 'Catar', 'Suiza'] },
+        { name: 'C', teams: ['Brasil', 'Marruecos', 'Haití', 'Escocia'] },
+        { name: 'D', teams: ['Estados Unidos', 'Paraguay', 'Australia', getW('uefa_c')] },
+        { name: 'E', teams: ['Alemania', 'Curazao', 'Costa de Marfil', 'Ecuador'] },
+        { name: 'F', teams: ['Países Bajos', 'Japón', getW('uefa_b'), 'Túnez'] },
+        { name: 'G', teams: ['Bélgica', 'Egipto', 'Irán', 'Nueva Zelanda'] },
+        { name: 'H', teams: ['España', 'Cabo Verde', 'Arabia Saudí', 'Uruguay'] },
+        { name: 'I', teams: ['Francia', 'Senegal', getW('inter_a'), 'Noruega'] },
+        { name: 'J', teams: ['Argentina', 'Argelia', 'Austria', 'Jordania'] },
+        { name: 'K', teams: ['Portugal', getW('inter_b'), 'Uzbekistán', 'Colombia'] },
+        { name: 'L', teams: ['Inglaterra', 'Croacia', 'Ghana', 'Panamá'] },
+      ];
+  };
+
   const handleManualSelect = (matchId, slot, teamName) => {
       if (!isManualMode) return;
-      const newBracket = { ...manualBracket };
-      newBracket.r32 = newBracket.r32.map(m => ({ ...m }));
-      
-      const r32Idx = newBracket.r32.findIndex(m => m.id === matchId);
-      if (r32Idx !== -1) {
-          newBracket.r32[r32Idx] = { ...newBracket.r32[r32Idx], [slot]: teamName };
-          newBracket.r32[r32Idx].winner = null;
-          newBracket.r32[r32Idx].score1 = '';
-          newBracket.r32[r32Idx].score2 = '';
+      const newBracket = JSON.parse(JSON.stringify(manualBracket));
+      const match = getBracketMatch(newBracket, matchId);
+      if (match) {
+          match[slot] = teamName;
+          match.winner = null;
+          match.score1 = ''; match.score2 = '';
+          clearFutureRounds(newBracket, matchId);
       }
       setManualBracket(newBracket);
   };
 
   const handleManualPick = (matchId, winnerName) => {
       if (!isManualMode) return;
-      const newBracket = JSON.parse(JSON.stringify(manualBracket)); // Deep clone
-      
-      const findMatch = (id) => {
-          for (const k of ['r32', 'r16', 'qf', 'sf', 'final']) {
-              const m = newBracket[k].find(x => x.id === id);
-              if (m) return m;
-          }
-          if (newBracket.third.id === id) return newBracket.third;
-          return null;
-      };
-
-      const match = findMatch(matchId);
+      const newBracket = JSON.parse(JSON.stringify(manualBracket));
+      const match = getBracketMatch(newBracket, matchId);
       if (!match) return;
 
       match.winner = winnerName;
       if (winnerName === match.team1) { match.score1 = '✔'; match.score2 = ''; } 
       else { match.score1 = ''; match.score2 = '✔'; }
 
-      // Check for champion trigger
-      if (match.id === 104 && winnerName) {
-          setTimeout(() => setShowWinnerPopup(true), 600);
-      }
+      if (match.id === 104 && winnerName) setTimeout(() => setShowWinnerPopup(true), 600);
 
       const mapInfo = NEXT_MATCH_MAP[matchId];
       if (mapInfo) {
-          const nextMatch = findMatch(mapInfo.next);
+          const nextMatch = getBracketMatch(newBracket, mapInfo.next);
           if (nextMatch) {
               nextMatch.winner = null; 
               nextMatch.score1 = ''; nextMatch.score2 = '';
               nextMatch[mapInfo.slot] = winnerName;
-              
-              const clearFuture = (mId) => {
-                  const info = NEXT_MATCH_MAP[mId];
-                  if(info) {
-                      const fM = findMatch(info.next);
-                      if(fM) {
-                          fM[info.slot] = null;
-                          fM.winner = null;
-                          fM.score1 = ''; fM.score2 = '';
-                          clearFuture(fM.id);
-                      }
-                  }
-              };
-              clearFuture(nextMatch.id);
+              clearFutureRounds(newBracket, nextMatch.id);
           }
-          
           if (mapInfo.loserNext) {
-               const loserName = winnerName === match.team1 ? match.team2 : match.team1;
                const thirdMatch = newBracket.third;
                if(thirdMatch.id === mapInfo.loserNext) {
-                   thirdMatch[mapInfo.loserSlot] = loserName;
+                   thirdMatch[mapInfo.loserSlot] = (winnerName === match.team1 ? match.team2 : match.team1);
                    thirdMatch.winner = null;
                    thirdMatch.score1 = ''; thirdMatch.score2 = '';
                }
@@ -367,94 +461,109 @@ export default function App() {
 
   const runSimulation = () => {
     setShowWinnerPopup(false);
+    
+    // 1. Initialize Playoffs (Auto or Blank)
     let playoffResults = {};
     let qualifiedTeams = {}; 
 
+    // Simulation Logic for Auto
     const runUefaBracket = (key, teams) => {
         const semi1 = simulateMatch(teams[0], teams[3], simMode, true);
         const semi2 = simulateMatch(teams[1], teams[2], simMode, true);
         const final = simulateMatch(semi1.winner, semi2.winner, simMode, true);
-        playoffResults[key] = { name: PLAYOFF_STRUCTURE[key].name, matches: [semi1, semi2, final], winner: final.winner };
-        return final.winner;
+        return { name: PLAYOFF_STRUCTURE[key].name, matches: [semi1, semi2, final], winner: final.winner };
     };
     const runInterLadder = (key, teams) => {
         const semi = simulateMatch(teams[1], teams[2], simMode, true);
         const final = simulateMatch(teams[0], semi.winner, simMode, true);
-        playoffResults[key] = { name: PLAYOFF_STRUCTURE[key].name, matches: [semi, final], winner: final.winner };
-        return final.winner;
+        return { name: PLAYOFF_STRUCTURE[key].name, matches: [semi, final], winner: final.winner };
     };
 
-    qualifiedTeams['uefa_a'] = runUefaBracket('uefa_a', PLAYOFF_STRUCTURE.uefa_a.teams);
-    qualifiedTeams['uefa_b'] = runUefaBracket('uefa_b', PLAYOFF_STRUCTURE.uefa_b.teams);
-    qualifiedTeams['uefa_c'] = runUefaBracket('uefa_c', PLAYOFF_STRUCTURE.uefa_c.teams);
-    qualifiedTeams['uefa_d'] = runUefaBracket('uefa_d', PLAYOFF_STRUCTURE.uefa_d.teams);
-    qualifiedTeams['inter_a'] = runInterLadder('inter_a', PLAYOFF_STRUCTURE.inter_a.teams);
-    qualifiedTeams['inter_b'] = runInterLadder('inter_b', PLAYOFF_STRUCTURE.inter_b.teams);
+    // Initialize Manual Playoffs (Blank)
+    const initManualPlayoff = (key, type, teams) => {
+        let matches = [];
+        if (type === 'bracket') {
+            matches = [
+                { id: `${key}-s1`, team1: teams[0], team2: teams[3], winner: null, score1: '', score2: '' },
+                { id: `${key}-s2`, team1: teams[1], team2: teams[2], winner: null, score1: '', score2: '' },
+                { id: `${key}-f`, team1: null, team2: null, winner: null, score1: '', score2: '' } // Teams depend on semis
+            ];
+        } else {
+            matches = [
+                { id: `${key}-s`, team1: teams[1], team2: teams[2], winner: null, score1: '', score2: '' },
+                { id: `${key}-f`, team1: teams[0], team2: null, winner: null, score1: '', score2: '' }
+            ];
+        }
+        return { name: PLAYOFF_STRUCTURE[key].name, matches, winner: null };
+    };
 
+    if (simMode === MODES.MANUAL) {
+        playoffResults['uefa_a'] = initManualPlayoff('uefa_a', 'bracket', PLAYOFF_STRUCTURE.uefa_a.teams);
+        playoffResults['uefa_b'] = initManualPlayoff('uefa_b', 'bracket', PLAYOFF_STRUCTURE.uefa_b.teams);
+        playoffResults['uefa_c'] = initManualPlayoff('uefa_c', 'bracket', PLAYOFF_STRUCTURE.uefa_c.teams);
+        playoffResults['uefa_d'] = initManualPlayoff('uefa_d', 'bracket', PLAYOFF_STRUCTURE.uefa_d.teams);
+        playoffResults['inter_a'] = initManualPlayoff('inter_a', 'ladder', PLAYOFF_STRUCTURE.inter_a.teams);
+        playoffResults['inter_b'] = initManualPlayoff('inter_b', 'ladder', PLAYOFF_STRUCTURE.inter_b.teams);
+        setManualPlayoffs(playoffResults);
+        
+        // Manual mode initially has no qualified teams from playoffs
+        qualifiedTeams = { uefa_a: null, uefa_b: null, uefa_c: null, uefa_d: null, inter_a: null, inter_b: null };
+    } else {
+        // Auto
+        playoffResults['uefa_a'] = runUefaBracket('uefa_a', PLAYOFF_STRUCTURE.uefa_a.teams);
+        playoffResults['uefa_b'] = runUefaBracket('uefa_b', PLAYOFF_STRUCTURE.uefa_b.teams);
+        playoffResults['uefa_c'] = runUefaBracket('uefa_c', PLAYOFF_STRUCTURE.uefa_c.teams);
+        playoffResults['uefa_d'] = runUefaBracket('uefa_d', PLAYOFF_STRUCTURE.uefa_d.teams);
+        playoffResults['inter_a'] = runInterLadder('inter_a', PLAYOFF_STRUCTURE.inter_a.teams);
+        playoffResults['inter_b'] = runInterLadder('inter_b', PLAYOFF_STRUCTURE.inter_b.teams);
+        
+        Object.keys(playoffResults).forEach(k => qualifiedTeams[k] = playoffResults[k].winner);
+    }
+
+    // 2. Groups
+    const getW = (k) => qualifiedTeams[k] || `Ganador ${PLAYOFF_STRUCTURE[k].name}`;
     const GROUPS = [
-        { name: 'A', teams: ['México', 'Sudáfrica', 'República de Corea', qualifiedTeams['uefa_d']] },
-        { name: 'B', teams: ['Canadá', qualifiedTeams['uefa_a'], 'Catar', 'Suiza'] },
+        { name: 'A', teams: ['México', 'Sudáfrica', 'República de Corea', getW('uefa_d')] },
+        { name: 'B', teams: ['Canadá', getW('uefa_a'), 'Catar', 'Suiza'] },
         { name: 'C', teams: ['Brasil', 'Marruecos', 'Haití', 'Escocia'] },
-        { name: 'D', teams: ['Estados Unidos', 'Paraguay', 'Australia', qualifiedTeams['uefa_c']] },
+        { name: 'D', teams: ['Estados Unidos', 'Paraguay', 'Australia', getW('uefa_c')] },
         { name: 'E', teams: ['Alemania', 'Curazao', 'Costa de Marfil', 'Ecuador'] },
-        { name: 'F', teams: ['Países Bajos', 'Japón', qualifiedTeams['uefa_b'], 'Túnez'] },
+        { name: 'F', teams: ['Países Bajos', 'Japón', getW('uefa_b'), 'Túnez'] },
         { name: 'G', teams: ['Bélgica', 'Egipto', 'Irán', 'Nueva Zelanda'] },
         { name: 'H', teams: ['España', 'Cabo Verde', 'Arabia Saudí', 'Uruguay'] },
-        { name: 'I', teams: ['Francia', 'Senegal', qualifiedTeams['inter_a'], 'Noruega'] },
+        { name: 'I', teams: ['Francia', 'Senegal', getW('inter_a'), 'Noruega'] },
         { name: 'J', teams: ['Argentina', 'Argelia', 'Austria', 'Jordania'] },
-        { name: 'K', teams: ['Portugal', qualifiedTeams['inter_b'], 'Uzbekistán', 'Colombia'] },
+        { name: 'K', teams: ['Portugal', getW('inter_b'), 'Uzbekistán', 'Colombia'] },
         { name: 'L', teams: ['Inglaterra', 'Croacia', 'Ghana', 'Panamá'] },
     ];
 
-    const getGroupTeams = (gName) => GROUPS.find(g => g.name === gName)?.teams || [];
-    const getMultiGroupTeams = (str) => {
-        const keys = str.split('');
-        let teams = [];
-        keys.forEach(k => teams.push(...getGroupTeams(k)));
-        return teams;
-    };
-
+    // Sim Group Stage (For Auto Mode stats)
     let groupResults = {};
     GROUPS.forEach(g => { groupResults[g.name] = g.teams.map(t => ({ name: t, points: 0, gf: 0, ga: 0, wins: 0, draws: 0, losses: 0, group: g.name })); });
+    if (simMode !== MODES.MANUAL) {
+        GROUPS.forEach(g => {
+            const teams = g.teams;
+            for (let i = 0; i < teams.length; i++) {
+                for (let j = i + 1; j < teams.length; j++) {
+                    const t1 = teams[i]; const t2 = teams[j];
+                    const result = simulateMatch(t1, t2, simMode, false);
+                    const s1 = groupResults[g.name].find(t => t.name === t1);
+                    const s2 = groupResults[g.name].find(t => t.name === t2);
+                    s1.gf += result.score1; s1.ga += result.score2;
+                    s2.gf += result.score2; s2.ga += result.score1;
+                    if (result.score1 > result.score2) { s1.points += 3; s1.wins++; s2.losses++; }
+                    else if (result.score2 > result.score1) { s2.points += 3; s2.wins++; s1.losses++; }
+                    else { s1.points += 1; s2.points += 1; s1.draws++; s2.draws++; }
+                }
+            }
+            groupResults[g.name].sort((a, b) => {
+                if (b.points !== a.points) return b.points - a.points;
+                return (b.gf - b.ga) - (a.gf - a.ga);
+            });
+        });
+    }
 
-    GROUPS.forEach(g => {
-      const teams = g.teams;
-      for (let i = 0; i < teams.length; i++) {
-        for (let j = i + 1; j < teams.length; j++) {
-          const t1 = teams[i]; const t2 = teams[j];
-          const result = simulateMatch(t1, t2, simMode, false);
-          const s1 = groupResults[g.name].find(t => t.name === t1);
-          const s2 = groupResults[g.name].find(t => t.name === t2);
-          s1.gf += result.score1; s1.ga += result.score2;
-          s2.gf += result.score2; s2.ga += result.score1;
-          if (result.score1 > result.score2) { s1.points += 3; s1.wins++; s2.losses++; }
-          else if (result.score2 > result.score1) { s2.points += 3; s2.wins++; s1.losses++; }
-          else { s1.points += 1; s2.points += 1; s1.draws++; s2.draws++; }
-        }
-      }
-      groupResults[g.name].sort((a, b) => {
-        if (b.points !== a.points) return b.points - a.points;
-        return (b.gf - b.ga) - (a.gf - a.ga);
-      });
-    });
-
-    const getPos = (groupName, pos) => groupResults[groupName][pos - 1].name;
-    let thirdPlaces = [];
-    GROUPS.forEach(g => thirdPlaces.push({ ...groupResults[g.name][2], group: g.name }));
-    thirdPlaces.sort((a, b) => {
-        if (b.points !== a.points) return b.points - a.points;
-        return (b.gf - b.ga) - (a.gf - a.ga);
-    });
-    const best8Thirds = thirdPlaces.slice(0, 8);
-    let usedThirds = [];
-    const get3rd = (allowed, used) => {
-        const allowList = allowed.split('');
-        let c = best8Thirds.find(t => allowList.includes(t.group) && !used.includes(t.name));
-        if (!c) c = best8Thirds.find(t => !used.includes(t.name));
-        if (c) { used.push(c.name); return c.name; }
-        return "TBD"; 
-    };
-
+    // Bracket Init
     const r32Structure = [
         { id: 73, s1: {t: 'pos', g: 'A'}, s2: {t: 'pos', g: 'B'}, label1: '2º A', label2: '2º B', stadium: 'LA Stadium' },
         { id: 74, s1: {t: 'pos', g: 'E', p: 1}, s2: {t: '3rd', g: 'ABCD F'}, label1: '1º E', label2: '3º A/B/C/D/F', stadium: 'Boston' },
@@ -474,94 +583,97 @@ export default function App() {
         { id: 88, s1: {t: 'pos', g: 'D'}, s2: {t: 'pos', g: 'G'}, label1: '2º D', label2: '2º G', stadium: 'Dallas' }
     ];
 
-    let r32Matches = r32Structure.map(d => {
-        let t1, t2;
-        let source1, source2;
+    // Helpers for Auto
+    const getPos = (gName, p) => groupResults[gName][p-1].name;
+    let autoThirds = []; 
+    if(simMode !== MODES.MANUAL) {
+        GROUPS.forEach(g => autoThirds.push({ ...groupResults[g.name][2], group: g.name }));
+        autoThirds.sort((a,b) => (b.points - a.points) || ((b.gf-b.ga) - (a.gf-a.ga)));
+    }
+    const getAuto3rd = (allowed, used) => {
+        let c = autoThirds.slice(0,8).find(t => allowed.includes(t.group) && !used.includes(t.name));
+        if(!c) c = autoThirds.slice(0,8).find(t => !used.includes(t.name));
+        if(c) { used.push(c.name); return c.name; }
+        return 'TBD';
+    };
+    let usedAuto3rds = [];
 
+    // Manual Helper
+    const getManualTeams = (str) => {
+        let t = []; str.split('').forEach(k => t.push(...GROUPS.find(g => g.name === k).teams)); return t;
+    };
+
+    let r32 = r32Structure.map(d => {
+        let t1, t2, s1, s2;
         if (simMode === MODES.MANUAL) {
             t1 = null; t2 = null;
-            source1 = d.s1.t === '3rd' ? getMultiGroupTeams(d.s1.g.replace(' ','')) : getGroupTeams(d.s1.g);
-            source2 = d.s2.t === '3rd' ? getMultiGroupTeams(d.s2.g.replace(' ','')) : getGroupTeams(d.s2.g);
+            // For Manual, source comes from the GROUPS array which now contains "Ganador..." placeholders.
+            // These placeholders will be dynamically updated in `updateR32Sources` as user picks playoff winners.
+            s1 = d.s1.t === '3rd' ? getManualTeams(d.s1.g.replace(' ','')) : GROUPS.find(g => g.name === d.s1.g).teams;
+            s2 = d.s2.t === '3rd' ? getManualTeams(d.s2.g.replace(' ','')) : GROUPS.find(g => g.name === d.s2.g).teams;
         } else {
-            t1 = d.s1.t === '3rd' ? get3rd(d.s1.g, usedThirds) : getPos(d.s1.g, d.s1.p || 2);
-            t2 = d.s2.t === '3rd' ? get3rd(d.s2.g, usedThirds) : getPos(d.s2.g, d.s2.p || 2);
+            t1 = d.s1.t === '3rd' ? getAuto3rd(d.s1.g, usedAuto3rds) : getPos(d.s1.g, d.s1.p || 2);
+            t2 = d.s2.t === '3rd' ? getAuto3rd(d.s2.g, usedAuto3rds) : getPos(d.s2.g, d.s2.p || 2);
         }
-
         const res = simulateMatch(t1, t2, simMode, true);
         return { 
-            id: d.id, stadium: d.stadium, 
-            team1: t1, team2: t2, 
+            id: d.id, stadium: d.stadium, team1: t1, team2: t2, 
             score1: res.score1, score2: res.score2, winner: res.winner,
-            label1: d.label1, label2: d.label2,
-            source1: source1, source2: source2 
+            label1: d.label1, label2: d.label2, source1: s1, source2: s2, meta: d 
         };
     });
 
-    const getW = (matches, id) => matches.find(m => m.id === id)?.winner;
-    
+    // Generate rest of bracket (Auto or Blank)
+    const generateNextRound = (prevRound, defs) => defs.map(d => {
+        const w1 = prevRound.find(m => m.id === d.s1)?.winner;
+        const w2 = prevRound.find(m => m.id === d.s2)?.winner;
+        return { ...simulateMatch(w1, w2, simMode, true), ...d };
+    });
+
     const r16Defs = [
         { id: 89, s1: 74, s2: 77, stadium: 'Philadelphia' }, { id: 90, s1: 73, s2: 75, stadium: 'Houston' },
         { id: 91, s1: 76, s2: 78, stadium: 'NY/NJ' }, { id: 92, s1: 79, s2: 80, stadium: 'Azteca' },
         { id: 93, s1: 83, s2: 84, stadium: 'Dallas' }, { id: 94, s1: 81, s2: 82, stadium: 'Seattle' },
         { id: 95, s1: 86, s2: 88, stadium: 'Atlanta' }, { id: 96, s1: 85, s2: 87, stadium: 'Vancouver' }
     ];
-    let r16 = r16Defs.map(d => ({ ...simulateMatch(getW(r32Matches, d.s1), getW(r32Matches, d.s2), simMode, true), ...d }));
-
     const qfDefs = [
         { id: 97, s1: 89, s2: 90, stadium: 'Boston' }, { id: 98, s1: 93, s2: 94, stadium: 'LA Stadium' },
         { id: 99, s1: 91, s2: 92, stadium: 'Miami' }, { id: 100, s1: 95, s2: 96, stadium: 'Kansas City' }
     ];
-    let qf = qfDefs.map(d => ({ ...simulateMatch(getW(r16, d.s1), getW(r16, d.s2), simMode, true), ...d }));
-
     const sfDefs = [
         { id: 101, s1: 97, s2: 98, stadium: 'Dallas' }, { id: 102, s1: 99, s2: 100, stadium: 'Atlanta' }
     ];
-    let sf = sfDefs.map(d => ({ ...simulateMatch(getW(qf, d.s1), getW(qf, d.s2), simMode, true), ...d }));
 
-    const getLoser = (matches, id) => { const m = matches.find(x => x.id === id); return m.winner === m.team1 ? m.team2 : m.team1; };
+    let r16 = generateNextRound(r32, r16Defs);
+    let qf = generateNextRound(r16, qfDefs);
+    let sf = generateNextRound(qf, sfDefs);
     
-    const third = { ...simulateMatch(getLoser(sf, 101), getLoser(sf, 102), simMode, true), id: 103, stadium: 'Miami', stage: '3er Puesto' };
-    const final = { ...simulateMatch(getW(sf, 101), getW(sf, 102), simMode, true), id: 104, stadium: 'NY/NJ', stage: 'FINAL' };
+    const getL = (matches, id) => { const m = matches.find(x => x.id === id); return m.winner === m.team1 ? m.team2 : m.team1; };
+    const wSf1 = sf.find(m => m.id === 101)?.winner; const wSf2 = sf.find(m => m.id === 102)?.winner;
+    const lSf1 = getL(sf, 101); const lSf2 = getL(sf, 102);
 
-    const generatedBracket = { r32: r32Matches, r16, qf, sf, third, final: [final] };
+    const third = { ...simulateMatch(lSf1, lSf2, simMode, true), id: 103, stadium: 'Miami', stage: '3er Puesto' };
+    const final = { ...simulateMatch(wSf1, wSf2, simMode, true), id: 104, stadium: 'NY/NJ', stage: 'FINAL' };
 
-    setSimulation({
-      playoffs: playoffResults,
-      groups: groupResults,
-      bracket: generatedBracket
-    });
+    const generatedBracket = { r32, r16, qf, sf, third, final: [final] };
+
+    setSimulation({ playoffs: playoffResults, groups: groupResults, bracket: generatedBracket });
     
     if (simMode === MODES.MANUAL) {
-        const blankBracket = {
-            r32: generatedBracket.r32, 
-            r16: generatedBracket.r16.map(m => ({ ...m, team1: null, team2: null, winner: null, score1: '', score2: '' })),
-            qf: generatedBracket.qf.map(m => ({ ...m, team1: null, team2: null, winner: null, score1: '', score2: '' })),
-            sf: generatedBracket.sf.map(m => ({ ...m, team1: null, team2: null, winner: null, score1: '', score2: '' })),
-            third: { ...generatedBracket.third, team1: null, team2: null, winner: null, score1: '', score2: '' },
-            final: [{ ...generatedBracket.final[0], team1: null, team2: null, winner: null, score1: '', score2: '' }]
-        };
-        setManualBracket(blankBracket);
         setIsManualMode(true);
-        setActiveTab('bracket');
+        setManualBracket(JSON.parse(JSON.stringify(generatedBracket))); // Blank due to logic above
+        setActiveTab('playoffs'); // Start at playoffs
     } else {
-        setManualBracket(JSON.parse(JSON.stringify(generatedBracket))); 
         setIsManualMode(false);
+        setManualBracket(JSON.parse(JSON.stringify(generatedBracket)));
         setActiveTab('playoffs');
     }
   };
 
   const displayBracket = isManualMode ? manualBracket : (simulation?.bracket || {});
-
-  const getSelectedTeamsR32 = () => {
-      if (!isManualMode || !manualBracket.r32) return [];
-      const teams = [];
-      manualBracket.r32.forEach(m => {
-          if (m.team1) teams.push(m.team1);
-          if (m.team2) teams.push(m.team2);
-      });
-      return teams;
-  };
-  const selectedTeamsR32 = getSelectedTeamsR32();
+  const displayPlayoffs = isManualMode ? manualPlayoffs : (simulation?.playoffs || {});
+  
+  const selectedTeamsR32 = isManualMode && manualBracket.r32 ? manualBracket.r32.flatMap(m => [m.team1, m.team2].filter(Boolean)) : [];
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-12">
@@ -626,17 +738,22 @@ export default function App() {
             {/* VIEWS */}
             {activeTab === 'playoffs' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-fadeIn">
-                    {Object.values(simulation.playoffs).map((p, idx) => (
-                        <div key={idx} className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-                            <h3 className="font-bold text-slate-800 mb-3 flex items-center gap-2"><Globe className="w-4 h-4 text-emerald-600"/> {p.name}</h3>
-                             <div className="space-y-2 mb-3">
-                                {p.matches.map((m, midx) => <MatchMini key={midx} match={m} />)}
+                    {Object.keys(displayPlayoffs).map((key) => {
+                        const p = displayPlayoffs[key];
+                        return (
+                            <div key={key} className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+                                <h3 className="font-bold text-slate-800 mb-3 flex items-center gap-2"><Globe className="w-4 h-4 text-emerald-600"/> {p.name}</h3>
+                                 <div className="space-y-2 mb-3">
+                                    {p.matches.map((m, midx) => (
+                                        <MatchMini key={m.id} match={m} isManual={isManualMode} onPick={(mid, winner) => executePlayoffPick(key, midx, winner)} />
+                                    ))}
+                                </div>
+                                <div className="bg-emerald-50 text-emerald-800 p-2 rounded text-center text-sm font-bold border border-emerald-100 flex justify-center items-center gap-2">
+                                    <span>Clasificado:</span> <TeamWithFlag name={p.winner} />
+                                </div>
                             </div>
-                            <div className="bg-emerald-50 text-emerald-800 p-2 rounded text-center text-sm font-bold border border-emerald-100 flex justify-center items-center gap-2">
-                                <span>Clasificado:</span> <TeamWithFlag name={p.winner} />
-                            </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             )}
 
