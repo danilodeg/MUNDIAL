@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Trophy, Shuffle, Play, RefreshCw, Shield, Award, Medal, Globe, Download, MousePointerClick, CheckCircle2, Pencil, ChevronUp, ChevronDown, X, ArrowRight } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Trophy, Shuffle, Play, RefreshCw, Shield, Award, Medal, Globe, Download, MousePointerClick, CheckCircle2, Pencil, ChevronDown, X } from 'lucide-react';
 
 // --- DATA & CONFIGURATION ---
 
@@ -38,23 +38,9 @@ const PLAYOFF_STRUCTURE = {
     inter_b: { name: 'Repechaje Inter. B', type: 'ladder', teams: ['Irak', 'Bolivia', 'Surinam'], targetGroup: 'K' }
 };
 
-const INITIAL_GROUPS_DEF = [
-    { name: 'A', teams: ['México', 'Sudáfrica', 'República de Corea', 'Ganador UEFA Playoff D'] },
-    { name: 'B', teams: ['Canadá', 'Ganador UEFA Playoff A', 'Catar', 'Suiza'] },
-    { name: 'C', teams: ['Brasil', 'Marruecos', 'Haití', 'Escocia'] },
-    { name: 'D', teams: ['Estados Unidos', 'Paraguay', 'Australia', 'Ganador UEFA Playoff C'] },
-    { name: 'E', teams: ['Alemania', 'Curazao', 'Costa de Marfil', 'Ecuador'] },
-    { name: 'F', teams: ['Países Bajos', 'Japón', 'Ganador UEFA Playoff B', 'Túnez'] },
-    { name: 'G', teams: ['Bélgica', 'Egipto', 'Irán', 'Nueva Zelanda'] },
-    { name: 'H', teams: ['España', 'Cabo Verde', 'Arabia Saudí', 'Uruguay'] },
-    { name: 'I', teams: ['Francia', 'Senegal', 'Ganador Repechaje Inter. A', 'Noruega'] },
-    { name: 'J', teams: ['Argentina', 'Argelia', 'Austria', 'Jordania'] },
-    { name: 'K', teams: ['Portugal', 'Ganador Repechaje Inter. B', 'Uzbekistán', 'Colombia'] },
-    { name: 'L', teams: ['Inglaterra', 'Croacia', 'Ghana', 'Panamá'] },
-];
-
 const MODES = { RANK: 'ranking', SURPRISE: 'surprise', RANDOM: 'random', MANUAL: 'manual' };
 
+// IDs numéricos para asegurar coincidencia estricta
 const NEXT_MATCH_MAP = {
     73: { next: 90, slot: 'team1' }, 75: { next: 90, slot: 'team2' },
     74: { next: 89, slot: 'team1' }, 77: { next: 89, slot: 'team2' },
@@ -74,13 +60,14 @@ const NEXT_MATCH_MAP = {
     102: { next: 104, slot: 'team2', loserNext: 103, loserSlot: 'team2' },
 };
 
-// --- LOGIC HELPERS ---
-
 const simulateMatch = (teamA, teamB, mode, cantDraw = false) => {
+  // If teams are not defined in manual mode, return placeholders
   if (!teamA || !teamB) return { team1: teamA, team2: teamB, score1: '', score2: '', winner: null };
+
   const rankA = TEAM_DATA[teamA]?.rank || 50;
   const rankB = TEAM_DATA[teamB]?.rank || 50;
   const effectiveMode = mode === MODES.MANUAL ? MODES.RANK : mode;
+  
   let probA = 0.5;
   if (effectiveMode === MODES.RANK) probA = rankA < rankB ? 1 : 0;
   else if (effectiveMode === MODES.SURPRISE) probA = Math.max(0.15, Math.min(0.85, 0.5 + ((rankB - rankA) / 150)));
@@ -100,6 +87,7 @@ const simulateMatch = (teamA, teamB, mode, cantDraw = false) => {
      if (rankA < rankB) { scoreA=Math.max(scoreA, scoreB+1); scoreB=Math.min(scoreB, scoreA-1); }
      else { scoreB=Math.max(scoreB, scoreA+1); scoreA=Math.min(scoreA, scoreB-1); }
   }
+  
   return { team1: teamA, team2: teamB, score1: scoreA, score2: scoreB, winner: scoreA > scoreB ? teamA : teamB };
 };
 
@@ -108,16 +96,17 @@ const TeamWithFlag = ({ name, className, big }) => {
     return (
         <div className={`flex items-center gap-2 ${className}`}>
             {iso && <img src={getFlag(iso)} alt={name} className={`${big ? 'w-10 h-7' : 'w-5 h-3.5'} shadow-sm object-cover rounded-[1px]`} />}
-            <span className={`truncate ${big ? 'text-lg' : ''}`}>{name || (big ? 'A definir' : 'TBD')}</span>
+            <span className={`truncate ${big ? 'text-lg' : ''}`}>{name || (big ? 'A definir' : '...')}</span>
         </div>
     );
 };
 
 const MatchMini = ({ match, onPick, isManual }) => {
+    const canPick = isManual && match.team1 && match.team2 && !match.winner;
     return (
         <div className="flex justify-between items-center text-xs py-1 border-b border-slate-100 last:border-0">
             <div 
-                className={`flex-1 flex items-center gap-2 p-1 rounded ${isManual ? "cursor-pointer hover:bg-slate-50" : ""} ${match.winner === match.team1 ? "font-bold text-slate-900 bg-emerald-50" : "text-slate-500"}`}
+                className={`flex-1 flex items-center gap-2 cursor-pointer p-1 rounded ${match.winner === match.team1 ? "font-bold text-slate-900 bg-emerald-50" : "text-slate-500 hover:bg-slate-50"}`}
                 onClick={() => isManual && onPick && onPick(match.id, match.team1)}
             >
                 <TeamWithFlag name={match.team1} />
@@ -126,7 +115,7 @@ const MatchMini = ({ match, onPick, isManual }) => {
                 {match.score1}-{match.score2}
             </div>
             <div 
-                className={`flex-1 flex justify-end items-center gap-2 p-1 rounded ${isManual ? "cursor-pointer hover:bg-slate-50" : ""} ${match.winner === match.team2 ? "font-bold text-slate-900 bg-emerald-50" : "text-slate-500"}`}
+                className={`flex-1 flex justify-end items-center gap-2 cursor-pointer p-1 rounded ${match.winner === match.team2 ? "font-bold text-slate-900 bg-emerald-50" : "text-slate-500 hover:bg-slate-50"}`}
                 onClick={() => isManual && onPick && onPick(match.id, match.team2)}
             >
                 <TeamWithFlag name={match.team2} className="flex-row-reverse" />
@@ -139,13 +128,13 @@ const InteractiveMatchCard = ({ match, isFinal, onPick, onSelectTeam, isManual, 
   if (!match) return null;
   const showSelector1 = isManual && match.source1 && !match.team1;
   const showSelector2 = isManual && match.source2 && !match.team2;
-  const canPickWinner = isManual && match.team1 && match.team2 && !match.winner;
+  const canPickWinner = match.team1 && match.team2;
 
   return (
     <div className={`relative bg-white p-3 rounded-lg border transition-all duration-200
         ${isFinal ? 'border-yellow-400 shadow-md ring-1 ring-yellow-100' : 'border-slate-200 shadow-sm'} 
         ${isManual && (!match.team1 || !match.team2) ? 'ring-2 ring-blue-100' : ''}
-        ${isManual && canPickWinner ? 'ring-2 ring-emerald-400 shadow-md cursor-pointer' : ''}
+        ${isManual && canPickWinner && !match.winner ? 'ring-2 ring-emerald-400 shadow-md' : ''}
         mb-2 flex flex-col justify-center min-w-[200px]`}>
       
       <div className="flex justify-between items-center text-xs text-slate-400 font-semibold mb-2 tracking-wider">
@@ -170,8 +159,8 @@ const InteractiveMatchCard = ({ match, isFinal, onPick, onSelectTeam, isManual, 
              </div>
          </div>
       ) : (
-        <div onClick={() => canPickWinner && onPick(match.id, match.team1)}
-            className={`flex justify-between items-center mb-1 p-1 rounded transition-colors ${match.winner === match.team1 ? 'bg-emerald-50' : (canPickWinner ? 'hover:bg-slate-50' : '')}`}>
+        <div onClick={() => isManual && canPickWinner && onPick(match.id, match.team1)}
+            className={`flex justify-between items-center mb-1 p-1 rounded cursor-pointer transition-colors ${match.winner === match.team1 ? 'bg-emerald-50' : (isManual && canPickWinner ? 'hover:bg-slate-50' : '')}`}>
             <div className={`flex items-center gap-2 text-sm font-medium ${match.winner === match.team1 ? 'text-slate-900 font-bold' : 'text-slate-500'}`}>
                 <TeamWithFlag name={match.team1} />
                 {isManual && match.winner === match.team1 && <CheckCircle2 className="w-4 h-4 text-emerald-600" />}
@@ -197,8 +186,8 @@ const InteractiveMatchCard = ({ match, isFinal, onPick, onSelectTeam, isManual, 
              </div>
          </div>
       ) : (
-        <div onClick={() => canPickWinner && onPick(match.id, match.team2)}
-            className={`flex justify-between items-center p-1 rounded transition-colors ${match.winner === match.team2 ? 'bg-emerald-50' : (canPickWinner ? 'hover:bg-slate-50' : '')}`}>
+        <div onClick={() => isManual && canPickWinner && onPick(match.id, match.team2)}
+            className={`flex justify-between items-center p-1 rounded cursor-pointer transition-colors ${match.winner === match.team2 ? 'bg-emerald-50' : (isManual && canPickWinner ? 'hover:bg-slate-50' : '')}`}>
             <div className={`flex items-center gap-2 text-sm font-medium ${match.winner === match.team2 ? 'text-slate-900 font-bold' : 'text-slate-500'}`}>
                 <TeamWithFlag name={match.team2} />
                 {isManual && match.winner === match.team2 && <CheckCircle2 className="w-4 h-4 text-emerald-600" />}
@@ -207,56 +196,13 @@ const InteractiveMatchCard = ({ match, isFinal, onPick, onSelectTeam, isManual, 
         </div>
       )}
       
-      {canPickWinner && (
+      {isManual && canPickWinner && !match.winner && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-0 hover:opacity-100">
               <span className="bg-slate-800/80 text-white text-xs px-2 py-1 rounded shadow-lg backdrop-blur">Click ganador</span>
           </div>
       )}
     </div>
   );
-};
-
-const GroupReorder = ({ groupName, teams, onReorder, isManual }) => {
-    const move = (idx, dir) => {
-        if (!isManual) return;
-        const newTeams = [...teams];
-        if (dir === -1 && idx > 0) {
-            [newTeams[idx], newTeams[idx-1]] = [newTeams[idx-1], newTeams[idx]];
-        } else if (dir === 1 && idx < teams.length - 1) {
-            [newTeams[idx], newTeams[idx+1]] = [newTeams[idx+1], newTeams[idx]];
-        }
-        onReorder(groupName, newTeams);
-    };
-
-    return (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="bg-slate-800 px-4 py-2 text-white font-bold flex justify-between items-center">
-                <span>Grupo {groupName}</span>
-            </div>
-            <div className="p-0">
-                <table className="w-full text-sm text-left">
-                    <tbody className="divide-y divide-slate-100">
-                        {teams.map((team, idx) => (
-                            <tr key={team} className={idx < 2 ? "bg-green-50/50" : (idx === 2 ? "bg-amber-50/30" : "")}>
-                                <td className="px-3 py-2 font-medium text-slate-700 flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-xs font-bold text-slate-400 w-4">{idx + 1}</span>
-                                        <TeamWithFlag name={team} />
-                                    </div>
-                                    {isManual && (
-                                        <div className="flex flex-col gap-0.5">
-                                            <button onClick={() => move(idx, -1)} disabled={idx===0} className="text-slate-300 hover:text-slate-600 disabled:opacity-0"><ChevronUp className="w-3 h-3"/></button>
-                                            <button onClick={() => move(idx, 1)} disabled={idx===teams.length-1} className="text-slate-300 hover:text-slate-600 disabled:opacity-0"><ChevronDown className="w-3 h-3"/></button>
-                                        </div>
-                                    )}
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    );
 };
 
 const GroupCard = ({ group, standings }) => (
@@ -289,55 +235,13 @@ const GroupCard = ({ group, standings }) => (
     </div>
   );
 
-const ThirdsTable = ({ thirds, onReorder, isManual }) => {
-    const move = (idx, dir) => {
-        if (!isManual) return;
-        const newThirds = [...thirds];
-        if (dir === -1 && idx > 0) {
-            [newThirds[idx], newThirds[idx-1]] = [newThirds[idx-1], newThirds[idx]];
-        } else if (dir === 1 && idx < thirds.length - 1) {
-            [newThirds[idx], newThirds[idx+1]] = [newThirds[idx+1], newThirds[idx]];
-        }
-        onReorder(newThirds);
-    };
-
-    return (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mt-6">
-            <div className="bg-slate-700 px-4 py-2 text-white font-bold flex justify-between items-center">
-                <span>Ranking de Terceros (Top 8 Clasifican)</span>
-            </div>
-            <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                {thirds.map((t, idx) => (
-                    <div key={t.group} className={`flex items-center justify-between p-2 rounded border ${idx < 8 ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-100 opacity-60'}`}>
-                        <div className="flex items-center gap-2">
-                            <span className={`text-xs font-bold w-6 ${idx<8?'text-amber-700':'text-slate-400'}`}>{idx+1}</span>
-                            <span className="text-xs font-mono bg-slate-200 px-1 rounded mr-2">Gr.{t.group}</span>
-                            <TeamWithFlag name={t.team} />
-                        </div>
-                        {isManual && (
-                            <div className="flex gap-1">
-                                <button onClick={() => move(idx, -1)} disabled={idx===0} className="p-1 hover:bg-slate-200 rounded"><ChevronUp className="w-3 h-3 text-slate-500"/></button>
-                                <button onClick={() => move(idx, 1)} disabled={idx===thirds.length-1} className="p-1 hover:bg-slate-200 rounded"><ChevronDown className="w-3 h-3 text-slate-500"/></button>
-                            </div>
-                        )}
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-};
-
 export default function App() {
   const [simMode, setSimMode] = useState(MODES.RANK);
   const [simulation, setSimulation] = useState(null);
   const [activeTab, setActiveTab] = useState('playoffs');
   const [isManualMode, setIsManualMode] = useState(false);
-  
-  // Manual State
+  const [manualBracket, setManualBracket] = useState({}); 
   const [manualPlayoffs, setManualPlayoffs] = useState({});
-  const [manualGroups, setManualGroups] = useState({}); // { A: [team1, team2...], ... }
-  const [manualThirds, setManualThirds] = useState([]); // [{ group: 'A', team: 'Mexico' }, ...]
-  const [manualBracket, setManualBracket] = useState({});
   const [showWinnerPopup, setShowWinnerPopup] = useState(false);
 
   useEffect(() => {
@@ -352,27 +256,13 @@ export default function App() {
     if (!window.html2canvas) { alert("Cargando librería..."); return; }
     const element = document.getElementById('bracket-export');
     window.html2canvas(element, { 
-        backgroundColor: "#1e293b", 
-        scale: 3, 
-        useCORS: true,
-        onclone: (documentClone) => {
-            const el = documentClone.getElementById('bracket-export');
-            el.style.backgroundColor = "#0f172a"; 
-            el.style.color = "#f8fafc"; 
-            el.style.padding = "40px";
-            const cards = el.querySelectorAll('.bg-white');
-            cards.forEach(card => {
-                card.style.backgroundColor = "#1e293b";
-                card.style.borderColor = "#334155";
-                card.style.color = "#f8fafc";
-            });
-            const texts = el.querySelectorAll('.text-slate-900, .text-slate-500, .text-slate-400');
-            texts.forEach(t => t.style.color = "#e2e8f0");
-        }
+        backgroundColor: "#ffffff", // Fondo blanco sólido
+        scale: 2, 
+        useCORS: true 
     }).then(canvas => {
         const link = document.createElement('a');
-        link.download = `Mundial2026_Pronostico_Dark.jpg`;
-        link.href = canvas.toDataURL("image/jpeg", 0.95);
+        link.download = `Mundial2026_Pronostico.jpg`; // JPG para asegurar fondo
+        link.href = canvas.toDataURL("image/jpeg", 0.9);
         link.click();
     });
   };
@@ -525,14 +415,6 @@ export default function App() {
           }
       }
       setManualBracket(newBracket);
-  };
-
-  const handleGroupReorder = (gName, newTeams) => {
-      setManualGroups(prev => ({ ...prev, [gName]: newTeams }));
-  };
-
-  const handleThirdsReorder = (newThirds) => {
-      setManualThirds(newThirds);
   };
 
   const runSimulation = () => {
@@ -757,57 +639,59 @@ export default function App() {
   const selectedTeamsR32 = isManualMode && manualBracket.r32 ? manualBracket.r32.flatMap(m => [m.team1, m.team2].filter(Boolean)) : [];
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100 font-sans pb-12">
-      <header className="bg-gradient-to-r from-emerald-900 to-slate-900 text-white p-6 shadow-lg border-b border-emerald-800">
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-12">
+      <header className="bg-gradient-to-r from-emerald-800 to-teal-900 text-white p-6 shadow-lg">
         <div className="max-w-6xl mx-auto">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <div className="flex items-center gap-3">
               <Trophy className="w-10 h-10 text-yellow-400" />
               <div>
                 <h1 className="text-2xl font-bold tracking-tight">Mundial 2026 Simulator</h1>
-                <p className="text-emerald-400 text-sm">Simulación & Prode Interactivo</p>
+                <p className="text-emerald-200 text-sm">48 Equipos | Simulación & Prode Interactivo</p>
               </div>
             </div>
-            <div className="flex flex-wrap gap-2 bg-slate-800/50 p-1 rounded-lg backdrop-blur-sm">
-               <button onClick={() => setSimMode(MODES.RANK)} className={`px-3 py-1.5 rounded text-xs md:text-sm font-medium transition-all ${simMode === MODES.RANK ? 'bg-white text-emerald-900 shadow' : 'text-slate-400 hover:text-white'}`}><Shield className="w-3 h-3 inline mr-1" />Ranking</button>
-               <button onClick={() => setSimMode(MODES.SURPRISE)} className={`px-3 py-1.5 rounded text-xs md:text-sm font-medium transition-all ${simMode === MODES.SURPRISE ? 'bg-white text-emerald-900 shadow' : 'text-slate-400 hover:text-white'}`}><Shuffle className="w-3 h-3 inline mr-1" />Sorpresa</button>
-               <button onClick={() => setSimMode(MODES.RANDOM)} className={`px-3 py-1.5 rounded text-xs md:text-sm font-medium transition-all ${simMode === MODES.RANDOM ? 'bg-white text-emerald-900 shadow' : 'text-slate-400 hover:text-white'}`}><RefreshCw className="w-3 h-3 inline mr-1" />Azar</button>
-               <button onClick={() => setSimMode(MODES.MANUAL)} className={`px-3 py-1.5 rounded text-xs md:text-sm font-bold transition-all border border-emerald-400/50 ${simMode === MODES.MANUAL ? 'bg-emerald-400 text-emerald-900 shadow' : 'text-slate-400 hover:text-white'}`}><Pencil className="w-3 h-3 inline mr-1" />Pronóstico</button>
+            <div className="flex flex-wrap gap-2 bg-emerald-900/50 p-1 rounded-lg backdrop-blur-sm">
+               <button onClick={() => setSimMode(MODES.RANK)} className={`px-3 py-1.5 rounded text-xs md:text-sm font-medium transition-all ${simMode === MODES.RANK ? 'bg-white text-emerald-900 shadow' : 'text-emerald-100 hover:bg-emerald-800'}`}><Shield className="w-3 h-3 inline mr-1" />Ranking</button>
+               <button onClick={() => setSimMode(MODES.SURPRISE)} className={`px-3 py-1.5 rounded text-xs md:text-sm font-medium transition-all ${simMode === MODES.SURPRISE ? 'bg-white text-emerald-900 shadow' : 'text-emerald-100 hover:bg-emerald-800'}`}><Shuffle className="w-3 h-3 inline mr-1" />Sorpresa</button>
+               <button onClick={() => setSimMode(MODES.RANDOM)} className={`px-3 py-1.5 rounded text-xs md:text-sm font-medium transition-all ${simMode === MODES.RANDOM ? 'bg-white text-emerald-900 shadow' : 'text-emerald-100 hover:bg-emerald-800'}`}><RefreshCw className="w-3 h-3 inline mr-1" />Azar</button>
+               <button onClick={() => setSimMode(MODES.MANUAL)} className={`px-3 py-1.5 rounded text-xs md:text-sm font-bold transition-all border border-emerald-400/50 ${simMode === MODES.MANUAL ? 'bg-emerald-400 text-emerald-900 shadow' : 'text-emerald-50 hover:bg-emerald-800'}`}><Pencil className="w-3 h-3 inline mr-1" />Pronóstico</button>
             </div>
           </div>
           <div className="mt-6 flex justify-center">
-            <button onClick={runSimulation} className="bg-yellow-500 hover:bg-yellow-400 text-slate-900 px-8 py-3 rounded-full font-bold shadow-lg shadow-yellow-500/20 transform hover:scale-105 transition-all flex items-center gap-2"><Play className="w-5 h-5" fill="currentColor" />{Object.keys(manualPlayoffs).length > 0 ? 'Reiniciar' : 'Comenzar'}</button>
+            <button onClick={runSimulation} className="bg-yellow-400 hover:bg-yellow-300 text-yellow-900 px-8 py-3 rounded-full font-bold shadow-lg transform hover:scale-105 transition-all flex items-center gap-2"><Play className="w-5 h-5" fill="currentColor" />{simulation ? 'Reiniciar' : 'Comenzar'}</button>
           </div>
         </div>
       </header>
 
       <main className="max-w-6xl mx-auto px-4 mt-8">
-        {!simulation && Object.keys(manualPlayoffs).length === 0 ? (
-          <div className="text-center py-20 text-slate-600">
+        {!simulation && (
+          <div className="text-center py-20 text-slate-400">
             <Trophy className="w-24 h-24 mx-auto mb-4 opacity-20" />
             <p className="text-xl">Elige un modo y presiona "Comenzar" para generar el torneo.</p>
           </div>
-        ) : (
+        )}
+
+        {simulation && (
           <>
-            <div className="flex flex-col md:flex-row border-b border-slate-700 mb-6 gap-2 md:gap-0">
+            <div className="flex flex-col md:flex-row border-b border-slate-200 mb-6 gap-2 md:gap-0">
               <div className="flex overflow-x-auto">
-                <button onClick={() => setActiveTab('playoffs')} className={`px-4 py-3 font-medium text-sm whitespace-nowrap ${activeTab === 'playoffs' ? 'border-b-2 border-emerald-600 text-emerald-400' : 'text-slate-500 hover:text-slate-300'}`}>1. Repechajes</button>
-                <button onClick={() => setActiveTab('groups')} className={`px-4 py-3 font-medium text-sm whitespace-nowrap ${activeTab === 'groups' ? 'border-b-2 border-emerald-600 text-emerald-400' : 'text-slate-500 hover:text-slate-300'}`}>2. Grupos</button>
-                <button onClick={() => setActiveTab('bracket')} className={`px-4 py-3 font-medium text-sm whitespace-nowrap ${activeTab === 'bracket' ? 'border-b-2 border-emerald-600 text-emerald-400' : 'text-slate-500 hover:text-slate-300'}`}>3. Fase Final</button>
+                <button onClick={() => setActiveTab('playoffs')} className={`px-4 py-3 font-medium text-sm whitespace-nowrap ${activeTab === 'playoffs' ? 'border-b-2 border-emerald-600 text-emerald-700' : 'text-slate-500'}`}>1. Repechajes</button>
+                <button onClick={() => setActiveTab('groups')} className={`px-4 py-3 font-medium text-sm whitespace-nowrap ${activeTab === 'groups' ? 'border-b-2 border-emerald-600 text-emerald-700' : 'text-slate-500'}`}>2. Grupos</button>
+                <button onClick={() => setActiveTab('bracket')} className={`px-4 py-3 font-medium text-sm whitespace-nowrap ${activeTab === 'bracket' ? 'border-b-2 border-emerald-600 text-emerald-700' : 'text-slate-500'}`}>3. Fase Final</button>
               </div>
               
               {activeTab === 'bracket' && (
-                  <div className="ml-auto flex items-center gap-4 bg-slate-800 p-2 rounded-lg border border-slate-700 shadow-sm">
+                  <div className="ml-auto flex items-center gap-4 bg-white p-2 rounded-lg border border-slate-200 shadow-sm">
                       <div className="flex items-center gap-2 cursor-pointer" onClick={() => setIsManualMode(!isManualMode)}>
-                          <div className={`w-10 h-6 rounded-full p-1 transition-colors ${isManualMode ? 'bg-emerald-500' : 'bg-slate-600'}`}>
+                          <div className={`w-10 h-6 rounded-full p-1 transition-colors ${isManualMode ? 'bg-emerald-500' : 'bg-slate-300'}`}>
                               <div className={`bg-white w-4 h-4 rounded-full shadow-sm transform transition-transform ${isManualMode ? 'translate-x-4' : ''}`} />
                           </div>
-                          <span className="text-sm font-bold text-slate-300 select-none flex items-center gap-1">
+                          <span className="text-sm font-bold text-slate-700 select-none flex items-center gap-1">
                               {isManualMode ? <MousePointerClick className="w-4 h-4"/> : null} 
-                              {isManualMode ? 'Modo Pronóstico' : 'Solo Lectura'}
+                              {isManualMode ? 'Modo: Mi Pronóstico' : 'Modo: Automático'}
                           </span>
                       </div>
-                      <button onClick={downloadImage} className="text-slate-400 hover:text-emerald-400" title="Descargar Imagen">
+                      <button onClick={downloadImage} className="text-slate-500 hover:text-emerald-600" title="Descargar Imagen">
                           <Download className="w-5 h-5" />
                       </button>
                   </div>
@@ -820,14 +704,14 @@ export default function App() {
                     {Object.keys(displayPlayoffs).map((key) => {
                         const p = displayPlayoffs[key];
                         return (
-                            <div key={key} className="bg-slate-800 rounded-xl p-4 border border-slate-700 shadow-lg">
-                                <h3 className="font-bold text-slate-200 mb-3 flex items-center gap-2"><Globe className="w-4 h-4 text-emerald-500"/> {p.name}</h3>
+                            <div key={key} className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+                                <h3 className="font-bold text-slate-800 mb-3 flex items-center gap-2"><Globe className="w-4 h-4 text-emerald-600"/> {p.name}</h3>
                                  <div className="space-y-2 mb-3">
                                     {p.matches.map((m, midx) => (
                                         <MatchMini key={m.id} match={m} isManual={isManualMode} onPick={(mid, winner) => executePlayoffPick(key, midx, winner)} />
                                     ))}
                                 </div>
-                                <div className="bg-emerald-900/30 text-emerald-400 p-2 rounded text-center text-sm font-bold border border-emerald-500/30 flex justify-center items-center gap-2">
+                                <div className="bg-emerald-50 text-emerald-800 p-2 rounded text-center text-sm font-bold border border-emerald-100 flex justify-center items-center gap-2">
                                     <span>Clasificado:</span> <TeamWithFlag name={p.winner} />
                                 </div>
                             </div>
@@ -837,48 +721,30 @@ export default function App() {
             )}
 
             {activeTab === 'groups' && (
-              <div className="animate-fadeIn">
-                {isManualMode ? (
-                    <>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
-                            {Object.keys(manualGroups).map(gName => (
-                                <GroupReorder key={gName} groupName={gName} teams={manualGroups[gName]} isManual={true} onReorder={handleGroupReorder} />
-                            ))}
-                        </div>
-                        <ThirdsTable thirds={manualThirds} isManual={true} onReorder={handleThirdsReorder} />
-                    </>
-                ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                        {simulation?.groups && Object.keys(simulation.groups).map(g => (
-                          <GroupCard key={g} group={{name: g}} standings={simulation.groups[g]} />
-                        ))}
-                    </div>
-                )}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-fadeIn">
+                {simulation.groups && Object.keys(simulation.groups).map(g => (
+                  <GroupCard key={g} group={{name: g}} standings={simulation.groups[g]} />
+                ))}
               </div>
             )}
 
             {activeTab === 'bracket' && (
-              <div id="bracket-export" className="space-y-8 animate-fadeIn pb-20 bg-slate-800 p-8 rounded-xl border border-slate-700 shadow-xl">
+              <div id="bracket-export" className="space-y-8 animate-fadeIn pb-20 bg-slate-50 p-4 rounded-xl">
                 
-                <div className="text-center mb-8">
-                    <h2 className="text-2xl font-bold text-white">Mi Pronóstico Mundial 2026</h2>
-                    <p className="text-slate-400 text-sm">Simulador & Prode Interactivo</p>
-                </div>
-
                 {isManualMode && (
-                    <div className="bg-blue-900/30 text-blue-300 p-3 rounded-lg text-center text-sm font-medium border border-blue-500/30 flex items-center justify-center gap-2">
+                    <div className="bg-blue-50 text-blue-800 p-3 rounded-lg text-center text-sm font-medium border border-blue-100 flex items-center justify-center gap-2 animate-pulse">
                         <MousePointerClick className="w-4 h-4" />
                         Modo Pronóstico Activo: Elige los equipos en los 16vos y luego haz clic para avanzar ganadores.
                     </div>
                 )}
 
                 {/* Champion */}
-                <div className="bg-gradient-to-b from-yellow-500/20 to-transparent border border-yellow-500/30 rounded-2xl p-6 text-center shadow-lg max-w-2xl mx-auto backdrop-blur-sm">
-                  <h2 className="text-yellow-200 text-xs font-bold uppercase tracking-widest mb-2">Campeón del Mundo 2026</h2>
+                <div className="bg-gradient-to-r from-yellow-100 to-amber-100 border border-yellow-200 rounded-2xl p-6 text-center shadow-sm max-w-2xl mx-auto">
+                  <h2 className="text-amber-800 text-xs font-bold uppercase tracking-widest mb-2">Campeón del Mundo 2026</h2>
                   <div className="flex flex-col items-center justify-center gap-2">
-                    <Award className="w-12 h-12 text-yellow-400" />
-                    <div className="text-3xl font-black text-white flex items-center gap-4">
-                       <TeamWithFlag name={displayBracket.final?.[0]?.winner} big={true} className="text-3xl" />
+                    <Award className="w-12 h-12 text-yellow-500" />
+                    <div className="text-3xl font-black text-slate-900 flex items-center gap-4">
+                       <TeamWithFlag name={displayBracket.final[0]?.winner} big={true} className="text-3xl" />
                     </div>
                   </div>
                 </div>
@@ -886,13 +752,13 @@ export default function App() {
                 {/* Final & 3rd */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                      <div className="flex flex-col items-center">
-                        <h3 className="text-lg font-bold text-slate-300 mb-3 flex items-center gap-2"><Trophy className="w-5 h-5 text-yellow-500"/> La Gran Final</h3>
+                        <h3 className="text-lg font-bold text-slate-800 mb-3 flex items-center gap-2"><Trophy className="w-5 h-5 text-yellow-500"/> La Gran Final</h3>
                         <div className="w-full max-w-sm">
-                            <InteractiveMatchCard match={displayBracket.final?.[0]} isFinal={true} onPick={handleManualPick} isManual={isManualMode} onSelectTeam={handleManualSelect} />
+                            <InteractiveMatchCard match={displayBracket.final[0]} isFinal={true} onPick={handleManualPick} isManual={isManualMode} onSelectTeam={handleManualSelect} />
                         </div>
                     </div>
                      <div className="flex flex-col items-center">
-                        <h3 className="text-lg font-bold text-slate-300 mb-3 flex items-center gap-2"><Medal className="w-5 h-5 text-amber-600"/> Tercer Puesto</h3>
+                        <h3 className="text-lg font-bold text-slate-600 mb-3 flex items-center gap-2"><Medal className="w-5 h-5 text-amber-600"/> Tercer Puesto</h3>
                         <div className="w-full max-w-sm">
                             <InteractiveMatchCard match={displayBracket.third} onPick={handleManualPick} isManual={isManualMode} onSelectTeam={handleManualSelect} />
                         </div>
@@ -903,9 +769,9 @@ export default function App() {
                 <div className="flex flex-col gap-8">
                     {[{ title: 'Semifinales', data: displayBracket.sf }, { title: 'Cuartos de Final', data: displayBracket.qf }, { title: 'Octavos de Final', data: displayBracket.r16 }, { title: '16vos de Final', data: displayBracket.r32 }].map((round, idx) => (
                         <div key={idx}>
-                             <h3 className="text-md font-bold text-slate-400 mb-3 border-l-4 border-emerald-500 pl-3">{round.title}</h3>
+                             <h3 className="text-md font-bold text-slate-600 mb-3 border-l-4 border-emerald-500 pl-3">{round.title}</h3>
                              <div className={`grid gap-3 ${idx === 0 ? 'grid-cols-1 md:grid-cols-2' : (idx === 1 ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4')}`}>
-                                 {round.data?.map(m => (
+                                 {round.data.map(m => (
                                      <InteractiveMatchCard 
                                         key={m.id} 
                                         match={m} 
@@ -920,7 +786,7 @@ export default function App() {
                     ))}
                 </div>
                 
-                <div className="text-center text-slate-500 text-xs mt-8">Generado con Simulador Mundial 2026</div>
+                <div className="text-center text-slate-400 text-xs mt-8">Generado con Simulador Mundial 2026</div>
               </div>
             )}
           </>
@@ -928,15 +794,22 @@ export default function App() {
       </main>
 
       {showWinnerPopup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
-            <div className="bg-slate-800 rounded-2xl shadow-2xl p-8 max-w-sm w-full text-center border border-slate-700">
-                <button onClick={() => setShowWinnerPopup(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white"><X className="w-6 h-6"/></button>
-                <Award className="w-16 h-16 text-yellow-400 mx-auto mb-4" />
-                <h3 className="text-2xl font-bold text-white mb-2">¡Pronóstico Completo!</h3>
-                <p className="text-slate-400 mb-6">Has completado todo el cuadro. Descarga tu predicción para compartirla.</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+            <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full text-center border border-white/20 relative">
+                <button onClick={() => setShowWinnerPopup(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><X className="w-5 h-5"/></button>
+                <div className="mb-4 flex justify-center">
+                    <div className="w-20 h-20 bg-yellow-100 rounded-full flex items-center justify-center shadow-inner">
+                        <Trophy className="w-10 h-10 text-yellow-500" />
+                    </div>
+                </div>
+                <h3 className="text-xl font-bold text-slate-800 mb-1">¡Tenemos Campeón!</h3>
+                <div className="flex items-center justify-center gap-3 my-4">
+                    <TeamWithFlag name={displayBracket.final[0]?.winner} big={true} className="text-2xl font-black text-slate-900" />
+                </div>
+                <p className="text-slate-500 text-sm mb-6">Tu pronóstico está completo. ¡Descarga la imagen y compártela!</p>
                 <button 
                     onClick={() => { downloadImage(); setShowWinnerPopup(false); }}
-                    className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-emerald-900/50 transition-all flex items-center justify-center gap-2"
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl shadow-lg shadow-emerald-200 transition-all flex items-center justify-center gap-2"
                 >
                     <Download className="w-5 h-5" />
                     Descargar Imagen
