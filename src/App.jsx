@@ -256,12 +256,12 @@ export default function App() {
     if (!window.html2canvas) { alert("Cargando librería..."); return; }
     const element = document.getElementById('bracket-export');
     window.html2canvas(element, { 
-        backgroundColor: "#ffffff", // Fondo blanco sólido
+        backgroundColor: "#f1f5f9", // Color de fondo gris claro (slate-100) para contraste
         scale: 2, 
         useCORS: true 
     }).then(canvas => {
         const link = document.createElement('a');
-        link.download = `Mundial2026_Pronostico.jpg`; // JPG para asegurar fondo
+        link.download = `Mundial2026_Pronostico.jpg`; // JPG para asegurar fondo opaco
         link.href = canvas.toDataURL("image/jpeg", 0.9);
         link.click();
     });
@@ -729,8 +729,13 @@ export default function App() {
             )}
 
             {activeTab === 'bracket' && (
-              <div id="bracket-export" className="space-y-8 animate-fadeIn pb-20 bg-slate-50 p-4 rounded-xl">
+              <div id="bracket-export" className="space-y-8 animate-fadeIn pb-20 bg-slate-50 p-8 rounded-xl border border-slate-200 shadow-sm">
                 
+                <div className="text-center mb-4">
+                    <h2 className="text-2xl font-bold text-slate-800">Mi Pronóstico - Mundial 2026</h2>
+                    <p className="text-slate-500 text-sm">Simulador & Prode Interactivo</p>
+                </div>
+
                 {isManualMode && (
                     <div className="bg-blue-50 text-blue-800 p-3 rounded-lg text-center text-sm font-medium border border-blue-100 flex items-center justify-center gap-2 animate-pulse">
                         <MousePointerClick className="w-4 h-4" />
