@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Trophy, Shuffle, Play, RefreshCw, Shield, Award, Medal, Globe, Download, MousePointerClick, CheckCircle2, Pencil, ChevronDown, X, Share2 } from 'lucide-react';
+import { Trophy, Shuffle, Play, RefreshCw, Shield, Award, Medal, Globe, Download, MousePointerClick, CheckCircle2, Pencil, ChevronDown } from 'lucide-react';
 
 // --- DATA & CONFIGURATION ---
 
@@ -99,7 +99,7 @@ const TeamWithFlag = ({ name, className, big }) => {
     const iso = TEAM_DATA[name]?.iso;
     return (
         <div className={`flex items-center gap-2 ${className}`}>
-            {iso && <img src={getFlag(iso)} alt={name} className={`${big ? 'w-10 h-7' : 'w-5 h-3.5'} shadow-sm object-cover rounded-[1px]`} />}
+            {iso && <img src={getFlag(iso)} alt={name} className={`${big ? 'w-8 h-6' : 'w-5 h-3.5'} shadow-sm object-cover rounded-[1px]`} />}
             <span className={`truncate ${big ? 'text-lg' : ''}`}>{name || (big ? 'A definir' : '...')}</span>
         </div>
     );
@@ -264,7 +264,6 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('playoffs');
   const [isManualMode, setIsManualMode] = useState(false);
   const [manualBracket, setManualBracket] = useState({}); 
-  const [showWinnerPopup, setShowWinnerPopup] = useState(false);
 
   useEffect(() => {
     const script = document.createElement('script');
@@ -277,11 +276,7 @@ export default function App() {
   const downloadImage = () => {
     if (!window.html2canvas) { alert("Cargando librería..."); return; }
     const element = document.getElementById('bracket-export');
-    window.html2canvas(element, { 
-        backgroundColor: "#ffffff", 
-        scale: 2,
-        useCORS: true
-    }).then(canvas => {
+    window.html2canvas(element, { backgroundColor: "#f8fafc", scale: 2 }).then(canvas => {
         const link = document.createElement('a');
         link.download = `Mundial2026_Pronostico.png`;
         link.href = canvas.toDataURL();
@@ -292,11 +287,13 @@ export default function App() {
   const handleManualSelect = (matchId, slot, teamName) => {
       if (!isManualMode) return;
       const newBracket = { ...manualBracket };
+      // Deep copy r32 array
       newBracket.r32 = newBracket.r32.map(m => ({ ...m }));
       
       const r32Idx = newBracket.r32.findIndex(m => m.id === matchId);
       if (r32Idx !== -1) {
           newBracket.r32[r32Idx] = { ...newBracket.r32[r32Idx], [slot]: teamName };
+          // Reset winner
           newBracket.r32[r32Idx].winner = null;
           newBracket.r32[r32Idx].score1 = '';
           newBracket.r32[r32Idx].score2 = '';
@@ -323,11 +320,6 @@ export default function App() {
       match.winner = winnerName;
       if (winnerName === match.team1) { match.score1 = '✔'; match.score2 = ''; } 
       else { match.score1 = ''; match.score2 = '✔'; }
-
-      // Check for champion trigger
-      if (match.id === 104 && winnerName) {
-          setTimeout(() => setShowWinnerPopup(true), 600);
-      }
 
       const mapInfo = NEXT_MATCH_MAP[matchId];
       if (mapInfo) {
@@ -366,7 +358,6 @@ export default function App() {
   };
 
   const runSimulation = () => {
-    setShowWinnerPopup(false);
     let playoffResults = {};
     let qualifiedTeams = {}; 
 
@@ -712,31 +703,6 @@ export default function App() {
           </>
         )}
       </main>
-
-      {showWinnerPopup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
-            <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full text-center border border-white/20 relative">
-                <button onClick={() => setShowWinnerPopup(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><X className="w-5 h-5"/></button>
-                <div className="mb-4 flex justify-center">
-                    <div className="w-20 h-20 bg-yellow-100 rounded-full flex items-center justify-center shadow-inner">
-                        <Trophy className="w-10 h-10 text-yellow-500" />
-                    </div>
-                </div>
-                <h3 className="text-xl font-bold text-slate-800 mb-1">¡Tenemos Campeón!</h3>
-                <div className="flex items-center justify-center gap-3 my-4">
-                    <TeamWithFlag name={displayBracket.final[0]?.winner} big={true} className="text-2xl font-black text-slate-900" />
-                </div>
-                <p className="text-slate-500 text-sm mb-6">Tu pronóstico está completo. ¡Descarga la imagen y compártela!</p>
-                <button 
-                    onClick={() => { downloadImage(); setShowWinnerPopup(false); }}
-                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl shadow-lg shadow-emerald-200 transition-all flex items-center justify-center gap-2"
-                >
-                    <Download className="w-5 h-5" />
-                    Descargar Imagen
-                </button>
-            </div>
-        </div>
-      )}
     </div>
   );
 }
