@@ -40,6 +40,7 @@ const PLAYOFF_STRUCTURE = {
 
 const MODES = { RANK: 'ranking', SURPRISE: 'surprise', RANDOM: 'random', MANUAL: 'manual' };
 
+// IDs numéricos para asegurar coincidencia estricta
 const NEXT_MATCH_MAP = {
     73: { next: 90, slot: 'team1' }, 75: { next: 90, slot: 'team2' },
     74: { next: 89, slot: 'team1' }, 77: { next: 89, slot: 'team2' },
@@ -299,22 +300,6 @@ export default function App() {
 
   // --- MANUAL HANDLERS ---
 
-  const handleManualPlayoffPick = (bracketKey, matchId, winnerName) => {
-      if (!isManualMode) return;
-      const newPlayoffs = JSON.parse(JSON.stringify(manualPlayoffs));
-      const pBracket = newPlayoffs[bracketKey];
-      const match = pBracket.matches.find(m => (m.team1 + m.team2) === matchId || (m.team1 === matchId) || (m.team2 === matchId)); // loose id match as matches don't have unique IDs in playoffs structure initially, let's assume index or create logic
-      // Actually matches in playoffs array don't have IDs. We need to find by teams.
-      // Re-finding strategy:
-      const matchIdx = pBracket.matches.findIndex(m => m.team1 === matchId || m.team2 === matchId || (m.team1 && m.team2 && (m.team1 + '-' + m.team2) === matchId));
-      
-      // Better approach: Assign IDs to playoff matches in manual mode init.
-      // Let's assume we pass the match OBJECT index in the array from the UI for simplicity
-      // Or just pass the match object ref? No, deep copy invalidates ref.
-      // Let's look at `MatchMini` implementation inside `playoffs` map.
-  };
-  
-  // Revised Playoff Pick Logic inside component map
   const executePlayoffPick = (bracketKey, matchIndex, winner) => {
       const newPlayoffs = JSON.parse(JSON.stringify(manualPlayoffs));
       const match = newPlayoffs[bracketKey].matches[matchIndex];
@@ -322,24 +307,17 @@ export default function App() {
       if (winner === match.team1) { match.score1 = '✔'; match.score2 = ''; } else { match.score1 = ''; match.score2 = '✔'; }
       
       // Propagate in Bracket/Ladder
-      // Bracket: 0 (semi1), 1 (semi2) -> 2 (final)
-      // Ladder: 0 (semi), 1 (final)
       if (PLAYOFF_STRUCTURE[bracketKey].type === 'bracket') {
           if (matchIndex === 0) newPlayoffs[bracketKey].matches[2].team1 = winner;
           if (matchIndex === 1) newPlayoffs[bracketKey].matches[2].team2 = winner;
           if (matchIndex === 2) newPlayoffs[bracketKey].winner = winner; // Champ
       } else {
           // Ladder: [seed, semi1, semi2] inputs. 
-          // Match 0 is Semi (teams[1] v teams[2]). Match 1 is Final (teams[0] v Winner 0)
           if (matchIndex === 0) newPlayoffs[bracketKey].matches[1].team2 = winner;
           if (matchIndex === 1) newPlayoffs[bracketKey].winner = winner;
       }
       
       setManualPlayoffs(newPlayoffs);
-      
-      // Trigger update of R32 sources based on new winner?
-      // R32 sources are derived from `getGroupTeams`. `getGroupTeams` uses `GROUPS` constant.
-      // We need to make `GROUPS` reactive to `manualPlayoffs`.
       updateR32Sources(newPlayoffs);
   };
 
@@ -348,54 +326,34 @@ export default function App() {
       const dynamicGroups = getGroupsWithWinners(currentPlayoffs);
       
       // Update manual bracket sources
-      const newBracket = JSON.parse(JSON.stringify(manualBracket));
-      
-      // Helper
-      const getGTeams = (gName) => dynamicGroups.find(g => g.name === gName)?.teams || [];
-      const getMTeams = (str) => {
-          let t = []; str.split('').forEach(k => t.push(...getGTeams(k))); return t;
-      };
-
-      if (newBracket.r32) {
-          newBracket.r32.forEach(m => {
-              if (m.source1) {
-                  // Re-evaluate source based on match definition. We need to know original definition.
-                  // We lost the 'g' and 't' (type) in previous map. Let's persist them in data.
-                  // Quick fix: Re-map using original structure logic if available, or just update known placeholders?
-                  // Better: Re-run r32 generation logic but keep selected teams if valid.
-                  // Or, just update the source arrays in place.
-                  // We need to know which group corresponds to which match.
-                  // Let's rely on stored labels/ids to reverse engineer or store metadata.
-                  // Storing metadata in r32 objects is best.
-              }
-          });
-      }
-      // Since managing deep update is complex, simpler is: user picks playoff winner -> it replaces placeholder in dropdown list.
-      // We will re-generate `manualBracket`'s sources in the render or via effect, but keep selections.
-      // Actually, we can just update `manualBracket` state with new sources.
-      
-      // Let's refresh sources
-      // We need the original definitions to know which groups to pull from.
-      // We'll add metadata to r32Matches in initialization.
-      
       setManualBracket(prev => {
           const next = { ...prev };
-          next.r32 = next.r32.map(m => {
-              if (!m.meta) return m; // Should have meta
-              const s1 = m.meta.s1.t === '3rd' ? getMTeams(m.meta.s1.g.replace(' ','')) : getGTeams(m.meta.s1.g);
-              const s2 = m.meta.s2.t === '3rd' ? getMTeams(m.meta.s2.g.replace(' ','')) : getGTeams(m.meta.s2.g);
-              
-              // If current selection is no longer in source (e.g. placeholder changed to real team), keep it? 
-              // No, if placeholder "Winner A" becomes "Wales", we should probably reset or auto-select Wales if it was selected?
-              // Let's just update sources.
-              return { ...m, source1: s1, source2: s2 };
-          });
+          const getGTeams = (gName) => dynamicGroups.find(g => g.name === gName)?.teams || [];
+          
+          // Fixed helper to avoid crash on empty space
+          const getMTeams = (str) => {
+              let t = []; 
+              // Safe split removing spaces
+              str.replace(/\s+/g, '').split('').forEach(k => {
+                  const grp = dynamicGroups.find(g => g.name === k);
+                  if (grp) t.push(...grp.teams);
+              }); 
+              return t;
+          };
+
+          if (next.r32) {
+              next.r32 = next.r32.map(m => {
+                  if (!m.meta) return m; 
+                  const s1 = m.meta.s1.t === '3rd' ? getMTeams(m.meta.s1.g) : getGTeams(m.meta.s1.g);
+                  const s2 = m.meta.s2.t === '3rd' ? getMTeams(m.meta.s2.g) : getGTeams(m.meta.s2.g);
+                  return { ...m, source1: s1, source2: s2 };
+              });
+          }
           return next;
       });
   };
 
   const getGroupsWithWinners = (playoffsState) => {
-      // Helper to safely get winner or placeholder
       const getW = (key) => playoffsState[key]?.winner || `Ganador ${PLAYOFF_STRUCTURE[key].name}`;
       return [
         { name: 'A', teams: ['México', 'Sudáfrica', 'República de Corea', getW('uefa_d')] },
@@ -468,14 +426,14 @@ export default function App() {
 
     // Simulation Logic for Auto
     const runUefaBracket = (key, teams) => {
-        const semi1 = simulateMatch(teams[0], teams[3], simMode, true);
-        const semi2 = simulateMatch(teams[1], teams[2], simMode, true);
-        const final = simulateMatch(semi1.winner, semi2.winner, simMode, true);
+        const semi1 = { ...simulateMatch(teams[0], teams[3], simMode, true), id: `${key}-s1` };
+        const semi2 = { ...simulateMatch(teams[1], teams[2], simMode, true), id: `${key}-s2` };
+        const final = { ...simulateMatch(semi1.winner, semi2.winner, simMode, true), id: `${key}-f` };
         return { name: PLAYOFF_STRUCTURE[key].name, matches: [semi1, semi2, final], winner: final.winner };
     };
     const runInterLadder = (key, teams) => {
-        const semi = simulateMatch(teams[1], teams[2], simMode, true);
-        const final = simulateMatch(teams[0], semi.winner, simMode, true);
+        const semi = { ...simulateMatch(teams[1], teams[2], simMode, true), id: `${key}-s` };
+        const final = { ...simulateMatch(teams[0], semi.winner, simMode, true), id: `${key}-f` };
         return { name: PLAYOFF_STRUCTURE[key].name, matches: [semi, final], winner: final.winner };
     };
 
@@ -486,7 +444,7 @@ export default function App() {
             matches = [
                 { id: `${key}-s1`, team1: teams[0], team2: teams[3], winner: null, score1: '', score2: '' },
                 { id: `${key}-s2`, team1: teams[1], team2: teams[2], winner: null, score1: '', score2: '' },
-                { id: `${key}-f`, team1: null, team2: null, winner: null, score1: '', score2: '' } // Teams depend on semis
+                { id: `${key}-f`, team1: null, team2: null, winner: null, score1: '', score2: '' } 
             ];
         } else {
             matches = [
@@ -506,7 +464,6 @@ export default function App() {
         playoffResults['inter_b'] = initManualPlayoff('inter_b', 'ladder', PLAYOFF_STRUCTURE.inter_b.teams);
         setManualPlayoffs(playoffResults);
         
-        // Manual mode initially has no qualified teams from playoffs
         qualifiedTeams = { uefa_a: null, uefa_b: null, uefa_c: null, uefa_d: null, inter_a: null, inter_b: null };
     } else {
         // Auto
@@ -600,7 +557,13 @@ export default function App() {
 
     // Manual Helper
     const getManualTeams = (str) => {
-        let t = []; str.split('').forEach(k => t.push(...GROUPS.find(g => g.name === k).teams)); return t;
+        let t = []; 
+        // Filter out spaces safely before using as group names
+        str.replace(/\s+/g, '').split('').forEach(k => {
+            const grp = GROUPS.find(g => g.name === k);
+            if (grp) t.push(...grp.teams);
+        }); 
+        return t;
     };
 
     let r32 = r32Structure.map(d => {
@@ -609,8 +572,8 @@ export default function App() {
             t1 = null; t2 = null;
             // For Manual, source comes from the GROUPS array which now contains "Ganador..." placeholders.
             // These placeholders will be dynamically updated in `updateR32Sources` as user picks playoff winners.
-            s1 = d.s1.t === '3rd' ? getManualTeams(d.s1.g.replace(' ','')) : GROUPS.find(g => g.name === d.s1.g).teams;
-            s2 = d.s2.t === '3rd' ? getManualTeams(d.s2.g.replace(' ','')) : GROUPS.find(g => g.name === d.s2.g).teams;
+            s1 = d.s1.t === '3rd' ? getManualTeams(d.s1.g) : GROUPS.find(g => g.name === d.s1.g).teams;
+            s2 = d.s2.t === '3rd' ? getManualTeams(d.s2.g) : GROUPS.find(g => g.name === d.s2.g).teams;
         } else {
             t1 = d.s1.t === '3rd' ? getAuto3rd(d.s1.g, usedAuto3rds) : getPos(d.s1.g, d.s1.p || 2);
             t2 = d.s2.t === '3rd' ? getAuto3rd(d.s2.g, usedAuto3rds) : getPos(d.s2.g, d.s2.p || 2);
