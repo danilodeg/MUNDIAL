@@ -102,7 +102,6 @@ const TeamWithFlag = ({ name, className, big }) => {
 };
 
 const MatchMini = ({ match, onPick, isManual }) => {
-    const canPick = isManual && match.team1 && match.team2 && !match.winner;
     return (
         <div className="flex justify-between items-center text-xs py-1 border-b border-slate-100 last:border-0">
             <div 
@@ -256,13 +255,61 @@ export default function App() {
     if (!window.html2canvas) { alert("Cargando librería..."); return; }
     const element = document.getElementById('bracket-export');
     window.html2canvas(element, { 
-        backgroundColor: "#f1f5f9", // Color de fondo gris claro (slate-100) para contraste
-        scale: 2, 
-        useCORS: true 
+        scale: 3, 
+        useCORS: true,
+        backgroundColor: "#1e293b", // Fondo oscuro inicial para evitar parpadeo blanco
+        onclone: (documentClone) => {
+            const el = documentClone.getElementById('bracket-export');
+            
+            // --- ESTILOS DE ALTO CONTRASTE (Modo Oscuro) ---
+            el.style.backgroundColor = "#0f172a"; // Slate 900
+            el.style.color = "#f8fafc"; 
+            el.style.padding = "40px";
+            el.style.borderRadius = "0";
+
+            // Títulos
+            const headings = el.querySelectorAll('h2, h3, .font-bold');
+            headings.forEach(h => h.style.color = "#f1f5f9");
+
+            // Tarjetas
+            const cards = el.querySelectorAll('.bg-white');
+            cards.forEach(card => {
+                card.style.backgroundColor = "#1e293b"; // Slate 800
+                card.style.borderColor = "#334155";
+                card.style.color = "#f8fafc";
+            });
+
+            // Textos dentro de tarjetas
+            const teamNames = el.querySelectorAll('.text-slate-900');
+            teamNames.forEach(t => t.style.color = "#ffffff"); // Blanco puro
+            
+            const mutedText = el.querySelectorAll('.text-slate-500, .text-slate-400');
+            mutedText.forEach(t => t.style.color = "#94a3b8"); // Slate 400
+
+            // Ganadores
+            const winners = el.querySelectorAll('.bg-emerald-50');
+            winners.forEach(w => {
+                w.style.backgroundColor = "rgba(16, 185, 129, 0.2)"; // Verde transparente
+                w.style.color = "#ffffff";
+            });
+            const winnerBadges = el.querySelectorAll('.bg-emerald-200');
+            winnerBadges.forEach(wb => {
+                wb.style.backgroundColor = "#059669";
+                wb.style.color = "#ffffff";
+            });
+
+            // Selectores (si quedaron visibles)
+            const selects = el.querySelectorAll('select');
+            selects.forEach(s => {
+                s.style.backgroundColor = "#334155";
+                s.style.color = "#ffffff";
+                s.style.borderColor = "#475569";
+            });
+        }
     }).then(canvas => {
         const link = document.createElement('a');
-        link.download = `Mundial2026_Pronostico.jpg`; // JPG para asegurar fondo opaco
-        link.href = canvas.toDataURL("image/jpeg", 0.9);
+        link.download = `Mundial2026_Pronostico_Dark.jpg`;
+        link.href = canvas.toDataURL("image/jpeg", 0.95);
         link.click();
     });
   };
