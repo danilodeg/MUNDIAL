@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Trophy, Shuffle, Play, RefreshCw, Shield, Award, Medal, Globe, Download, MousePointerClick, CheckCircle2, Pencil, ChevronUp, ChevronDown, X } from 'lucide-react';
+import { Trophy, Shuffle, Play, RefreshCw, Shield, Award, Medal, Globe, Download, MousePointerClick, CheckCircle2, Pencil, ChevronUp, ChevronDown, X, ArrowRight } from 'lucide-react';
 
 // --- DATA & CONFIGURATION ---
 
@@ -126,7 +126,7 @@ const TeamWithFlag = ({ name, className, big }) => {
     const iso = TEAM_DATA[name]?.iso;
     return (
         <div className={`flex items-center gap-2 ${className}`}>
-            {iso && <img src={getFlag(iso)} alt={name} className={`${big ? 'w-10 h-7' : 'w-5 h-3.5'} shadow-sm object-cover rounded-[1px]`} />}
+            {iso && <img src={getFlag(iso)} alt={name} className={`${big ? 'w-8 h-6' : 'w-5 h-3.5'} shadow-sm object-cover rounded-[1px]`} />}
             <span className={`truncate ${big ? 'text-lg' : ''}`}>{name || (big ? 'A definir' : 'TBD')}</span>
         </div>
     );
@@ -384,28 +384,37 @@ export default function App() {
 
   // --- MANUAL FLOW LOGIC ---
 
-  // Update Groups when Playoff Winners Change
+  // 1. Recalculate Groups when Playoffs change
   useEffect(() => {
-      if (simMode !== MODES.MANUAL) return;
+      if (simMode !== MODES.MANUAL || !manualPlayoffs.uefa_a) return; 
       
-      const newGroups = {};
-      INITIAL_GROUPS_DEF.forEach(gDef => {
-          newGroups[gDef.name] = gDef.teams.map(t => {
-              // Buscar si 't' es un placeholder que coincida con algún playoff
-              const playoffKey = Object.keys(PLAYOFF_STRUCTURE).find(k => {
-                  return PLAYOFF_STRUCTURE[k].targetGroup === gDef.name && t.includes('Ganador');
-              });
-              
-              if (playoffKey) {
-                  return manualPlayoffs[playoffKey]?.winner || t; // Retornar ganador o mantener placeholder
+      const getW = (key) => manualPlayoffs[key]?.winner || `Ganador ${PLAYOFF_STRUCTURE[key].name}`;
+      
+      setManualGroups(prev => {
+          const next = { ...prev };
+          INITIAL_GROUPS_DEF.forEach(gDef => {
+              if (!next[gDef.name]) {
+                  next[gDef.name] = gDef.teams.map(t => {
+                      const pKey = Object.keys(PLAYOFF_STRUCTURE).find(k => `Ganador ${PLAYOFF_STRUCTURE[k].name}` === t);
+                      return pKey ? getW(pKey) : t;
+                  });
+              } else {
+                  next[gDef.name] = next[gDef.name].map(t => {
+                      const playoffKey = Object.keys(PLAYOFF_STRUCTURE).find(k => PLAYOFF_STRUCTURE[k].targetGroup === gDef.name);
+                      if (!playoffKey) return t;
+                      const fixed = gDef.teams.filter(x => !x.includes('Ganador'));
+                      if (!fixed.includes(t)) {
+                          return getW(playoffKey);
+                      }
+                      return t;
+                  });
               }
-              return t;
           });
+          return next;
       });
-      setManualGroups(newGroups);
   }, [manualPlayoffs, simMode]);
 
-  // Update Thirds when Groups Change
+  // 2. Update Thirds when Groups Change
   useEffect(() => {
       if (simMode !== MODES.MANUAL || Object.keys(manualGroups).length === 0) return;
       
@@ -418,7 +427,7 @@ export default function App() {
       });
   }, [manualGroups, simMode]);
 
-  // Update Bracket Sources when Groups or Thirds Change
+  // 3. Update Bracket when Groups or Thirds Change
   useEffect(() => {
       if (simMode !== MODES.MANUAL || Object.keys(manualGroups).length === 0 || manualThirds.length === 0) return;
       generateManualBracket();
@@ -564,47 +573,112 @@ export default function App() {
       match.score1 = winner === match.team1 ? '✔' : '';
       match.score2 = winner === match.team2 ? '✔' : '';
       
+      // Propagate in Bracket/Ladder
       if (PLAYOFF_STRUCTURE[bracketKey].type === 'bracket') {
           if (matchIndex === 0) newPlayoffs[bracketKey].matches[2].team1 = winner;
           if (matchIndex === 1) newPlayoffs[bracketKey].matches[2].team2 = winner;
           if (matchIndex === 2) newPlayoffs[bracketKey].winner = winner;
       } else {
+          // Ladder: [seed, semi1, semi2] inputs. 
           if (matchIndex === 0) newPlayoffs[bracketKey].matches[1].team2 = winner;
           if (matchIndex === 1) newPlayoffs[bracketKey].winner = winner;
       }
+      
       setManualPlayoffs(newPlayoffs);
+      updateR32Sources(newPlayoffs);
   };
 
-  const executeBracketPick = (matchId, winner) => {
-      const newBracket = JSON.parse(JSON.stringify(manualBracket));
-      const findMatch = (id) => {
-          for (const k of ['r32', 'r16', 'qf', 'sf', 'final']) if(newBracket[k]) { const m = newBracket[k].find(x => x.id === id); if(m) return m; }
-          if (newBracket.third && newBracket.third.id === id) return newBracket.third;
-      };
+  const updateR32Sources = (currentPlayoffs) => {
+      // Reconstruct Groups based on new playoff winners
+      const dynamicGroups = getGroupsWithWinners(currentPlayoffs);
       
-      const match = findMatch(matchId);
-      if(match) {
-          match.winner = winner;
-          match.score1 = winner === match.team1 ? '✔' : '';
-          match.score2 = winner === match.team2 ? '✔' : '';
-          if(matchId === 104 && winner) setShowWinnerPopup(true);
+      // Update manual bracket sources
+      setManualBracket(prev => {
+          const next = { ...prev };
+          const getGTeams = (gName) => dynamicGroups.find(g => g.name === gName)?.teams || [];
+          
+          // Fixed helper to avoid crash on empty space
+          const getMTeams = (str) => {
+              let t = []; 
+              // Safe split removing spaces
+              str.replace(/\s+/g, '').split('').forEach(k => {
+                  const grp = dynamicGroups.find(g => g.name === k);
+                  if (grp) t.push(...grp.teams);
+              }); 
+              return t;
+          };
+
+          if (next.r32) {
+              next.r32 = next.r32.map(m => {
+                  if (!m.meta) return m; 
+                  const s1 = m.meta.s1.t === '3rd' ? getMTeams(m.meta.s1.g) : getGTeams(m.meta.s1.g);
+                  const s2 = m.meta.s2.t === '3rd' ? getMTeams(m.meta.s2.g) : getGTeams(m.meta.s2.g);
+                  return { ...m, source1: s1, source2: s2 };
+              });
+          }
+          return next;
+      });
+  };
+
+  const getGroupsWithWinners = (playoffsState) => {
+      const getW = (key) => playoffsState[key]?.winner || `Ganador ${PLAYOFF_STRUCTURE[key].name}`;
+      return [
+        { name: 'A', teams: ['México', 'Sudáfrica', 'República de Corea', getW('uefa_d')] },
+        { name: 'B', teams: ['Canadá', getW('uefa_a'), 'Catar', 'Suiza'] },
+        { name: 'C', teams: ['Brasil', 'Marruecos', 'Haití', 'Escocia'] },
+        { name: 'D', teams: ['Estados Unidos', 'Paraguay', 'Australia', getW('uefa_c')] },
+        { name: 'E', teams: ['Alemania', 'Curazao', 'Costa de Marfil', 'Ecuador'] },
+        { name: 'F', teams: ['Países Bajos', 'Japón', getW('uefa_b'), 'Túnez'] },
+        { name: 'G', teams: ['Bélgica', 'Egipto', 'Irán', 'Nueva Zelanda'] },
+        { name: 'H', teams: ['España', 'Cabo Verde', 'Arabia Saudí', 'Uruguay'] },
+        { name: 'I', teams: ['Francia', 'Senegal', getW('inter_a'), 'Noruega'] },
+        { name: 'J', teams: ['Argentina', 'Argelia', 'Austria', 'Jordania'] },
+        { name: 'K', teams: ['Portugal', getW('inter_b'), 'Uzbekistán', 'Colombia'] },
+        { name: 'L', teams: ['Inglaterra', 'Croacia', 'Ghana', 'Panamá'] },
+      ];
+  };
+
+  const handleManualSelect = (matchId, slot, teamName) => {
+      if (!isManualMode) return;
+      const newBracket = JSON.parse(JSON.stringify(manualBracket));
+      const match = getBracketMatch(newBracket, matchId);
+      if (match) {
+          match[slot] = teamName;
+          match.winner = null;
+          match.score1 = ''; match.score2 = '';
+          clearFutureRounds(newBracket, matchId);
       }
       setManualBracket(newBracket);
-      
+  };
+
+  const handleManualPick = (matchId, winnerName) => {
+      if (!isManualMode) return;
+      const newBracket = JSON.parse(JSON.stringify(manualBracket));
+      const match = getBracketMatch(newBracket, matchId);
+      if (!match) return;
+
+      match.winner = winnerName;
+      if (winnerName === match.team1) { match.score1 = '✔'; match.score2 = ''; } 
+      else { match.score1 = ''; match.score2 = '✔'; }
+
+      if (match.id === 104 && winnerName) setTimeout(() => setShowWinnerPopup(true), 600);
+
       const mapInfo = NEXT_MATCH_MAP[matchId];
       if (mapInfo) {
-          const nextMatch = findMatch(mapInfo.next);
+          const nextMatch = getBracketMatch(newBracket, mapInfo.next);
           if (nextMatch) {
-              nextMatch[mapInfo.slot] = winner;
-              nextMatch.winner = null; nextMatch.score1=''; nextMatch.score2='';
+              nextMatch.winner = null; 
+              nextMatch.score1 = ''; nextMatch.score2 = '';
+              nextMatch[mapInfo.slot] = winnerName;
               clearFutureRounds(newBracket, nextMatch.id);
           }
           if (mapInfo.loserNext) {
-              const tm = newBracket.third;
-              if (tm) {
-                  tm[mapInfo.loserSlot] = (winner === match.team1 ? match.team2 : match.team1);
-                  tm.winner=null; tm.score1=''; tm.score2='';
-              }
+               const thirdMatch = newBracket.third;
+               if(thirdMatch.id === mapInfo.loserNext) {
+                   thirdMatch[mapInfo.loserSlot] = (winnerName === match.team1 ? match.team2 : match.team1);
+                   thirdMatch.winner = null;
+                   thirdMatch.score1 = ''; thirdMatch.score2 = '';
+               }
           }
       }
       setManualBracket(newBracket);
@@ -686,6 +760,8 @@ export default function App() {
 
   const displayPlayoffs = isManualMode ? manualPlayoffs : (simulation?.playoffs || {});
   const displayBracket = isManualMode ? manualBracket : (simulation?.bracket || {});
+  
+  const selectedTeamsR32 = isManualMode && manualBracket.r32 ? manualBracket.r32.flatMap(m => [m.team1, m.team2].filter(Boolean)) : [];
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-12">
@@ -707,14 +783,14 @@ export default function App() {
             </div>
           </div>
           <div className="mt-6 flex justify-center">
-            <button onClick={runSimulation} className="bg-yellow-400 hover:bg-yellow-300 text-yellow-900 px-8 py-3 rounded-full font-bold shadow-lg transform hover:scale-105 transition-all flex items-center gap-2"><Play className="w-5 h-5" fill="currentColor" />{Object.keys(manualPlayoffs).length > 0 ? 'Reiniciar' : 'Comenzar'}</button>
+            <button onClick={runSimulation} className="bg-yellow-500 hover:bg-yellow-400 text-slate-900 px-8 py-3 rounded-full font-bold shadow-lg shadow-yellow-500/20 transform hover:scale-105 transition-all flex items-center gap-2"><Play className="w-5 h-5" fill="currentColor" />{Object.keys(manualPlayoffs).length > 0 ? 'Reiniciar' : 'Comenzar'}</button>
           </div>
         </div>
       </header>
 
       <main className="max-w-6xl mx-auto px-4 mt-8">
         {!simulation && Object.keys(manualPlayoffs).length === 0 ? (
-          <div className="text-center py-20 text-slate-400">
+          <div className="text-center py-20 text-slate-600">
             <Trophy className="w-24 h-24 mx-auto mb-4 opacity-20" />
             <p className="text-xl">Elige un modo y presiona "Comenzar" para generar el torneo.</p>
           </div>
