@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { Trophy, Shuffle, Play, RefreshCw, Shield, Award, Medal, Globe, Download, MousePointerClick, CheckCircle2, Pencil, ChevronDown } from 'lucide-react';
+import React, { useState } from 'react';
+import { Trophy, Shuffle, Play, RefreshCw, Shield, Award, Medal, Globe } from 'lucide-react';
 
 // --- DATA & CONFIGURATION ---
 
+// Helper para obtener URL de banderas (usando flagcdn)
 const getFlag = (iso) => iso ? `https://flagcdn.com/w40/${iso}.png` : null;
 
+// Rankings FIFA actualizados (Nov/Dec 2025 - Estimado) + Códigos ISO
 const TEAM_DATA = {
   // CLASIFICADOS DIRECTOS
   'México': { rank: 15, iso: 'mx' }, 'Sudáfrica': { rank: 61, iso: 'za' }, 'República de Corea': { rank: 22, iso: 'kr' },
@@ -21,11 +23,17 @@ const TEAM_DATA = {
   'Inglaterra': { rank: 4, iso: 'gb-eng' }, 'Croacia': { rank: 10, iso: 'hr' }, 'Ghana': { rank: 72, iso: 'gh' }, 'Panamá': { rank: 30, iso: 'pa' },
 
   // EQUIPOS DE REPECHAJE
+  // UEFA A
   'Italia': { rank: 9, iso: 'it' }, 'Gales': { rank: 32, iso: 'gb-wls' }, 'Bosnia': { rank: 75, iso: 'ba' }, 'Irlanda del Norte': { rank: 69, iso: 'gb-nir' },
+  // UEFA B
   'Ucrania': { rank: 27, iso: 'ua' }, 'Polonia': { rank: 33, iso: 'pl' }, 'Suecia': { rank: 43, iso: 'se' }, 'Albania': { rank: 63, iso: 'al' },
+  // UEFA C
   'Turquía': { rank: 26, iso: 'tr' }, 'Eslovaquia': { rank: 46, iso: 'sk' }, 'Rumania': { rank: 47, iso: 'ro' }, 'Kosovo': { rank: 84, iso: 'xk' },
+  // UEFA D
   'Dinamarca': { rank: 21, iso: 'dk' }, 'Rep. Checa': { rank: 44, iso: 'cz' }, 'Irlanda': { rank: 62, iso: 'ie' }, 'Macedonia del Norte': { rank: 65, iso: 'mk' },
+  // INTERCONTINENTAL A
   'RD Congo': { rank: 56, iso: 'cd' }, 'Jamaica': { rank: 70, iso: 'jm' }, 'Nueva Caledonia': { rank: 149, iso: 'nc' },
+  // INTERCONTINENTAL B
   'Irak': { rank: 58, iso: 'iq' }, 'Bolivia': { rank: 76, iso: 'bo' }, 'Surinam': { rank: 123, iso: 'sr' }
 };
 
@@ -38,69 +46,70 @@ const PLAYOFF_STRUCTURE = {
     inter_b: { name: 'Repechaje Inter. B', type: 'ladder', teams: ['Irak', 'Bolivia', 'Surinam'] }
 };
 
-const MODES = { RANK: 'ranking', SURPRISE: 'surprise', RANDOM: 'random', MANUAL: 'manual' };
-
-const NEXT_MATCH_MAP = {
-    74: { next: 89, slot: 'team1' }, 77: { next: 89, slot: 'team2' },
-    73: { next: 90, slot: 'team1' }, 75: { next: 90, slot: 'team2' },
-    76: { next: 91, slot: 'team1' }, 78: { next: 91, slot: 'team2' },
-    79: { next: 92, slot: 'team1' }, 80: { next: 92, slot: 'team2' },
-    83: { next: 93, slot: 'team1' }, 84: { next: 93, slot: 'team2' },
-    81: { next: 94, slot: 'team1' }, 82: { next: 94, slot: 'team2' },
-    86: { next: 95, slot: 'team1' }, 88: { next: 95, slot: 'team2' },
-    85: { next: 96, slot: 'team1' }, 87: { next: 96, slot: 'team2' },
-    89: { next: 97, slot: 'team1' }, 90: { next: 97, slot: 'team2' },
-    93: { next: 98, slot: 'team1' }, 94: { next: 98, slot: 'team2' },
-    91: { next: 99, slot: 'team1' }, 92: { next: 99, slot: 'team2' },
-    95: { next: 100, slot: 'team1' }, 96: { next: 100, slot: 'team2' },
-    97: { next: 101, slot: 'team1' }, 98: { next: 101, slot: 'team2' },
-    99: { next: 102, slot: 'team1' }, 100: { next: 102, slot: 'team2' },
-    101: { next: 104, slot: 'team1', loserNext: 103, loserSlot: 'team1' },
-    102: { next: 104, slot: 'team2', loserNext: 103, loserSlot: 'team2' },
+const MODES = {
+  RANK: 'ranking',   
+  SURPRISE: 'surprise', 
+  RANDOM: 'random', 
 };
 
 // --- LOGIC HELPERS ---
 
 const simulateMatch = (teamA, teamB, mode, cantDraw = false) => {
-  if (!teamA || !teamB) return { team1: teamA, team2: teamB, score1: '', score2: '', winner: null };
-
   const rankA = TEAM_DATA[teamA]?.rank || 50;
   const rankB = TEAM_DATA[teamB]?.rank || 50;
   
-  const effectiveMode = mode === MODES.MANUAL ? MODES.RANK : mode;
-
   let probA = 0.5;
-  if (effectiveMode === MODES.RANK) probA = rankA < rankB ? 1 : 0;
-  else if (effectiveMode === MODES.SURPRISE) probA = Math.max(0.15, Math.min(0.85, 0.5 + ((rankB - rankA) / 150)));
+
+  if (mode === MODES.RANK) {
+    probA = rankA < rankB ? 1 : 0;
+  } else if (mode === MODES.SURPRISE) {
+    const diff = rankB - rankA; 
+    probA = 0.5 + (diff / 150); 
+    probA = Math.max(0.15, Math.min(0.85, probA));
+  }
 
   let scoreA = 0, scoreB = 0;
   const rand = Math.random();
 
-  if (rand < probA) { scoreA = Math.floor(Math.random() * 3) + 1; scoreB = Math.floor(Math.random() * scoreA); } 
-  else if (!cantDraw && rand > probA + (effectiveMode === MODES.RANK ? 0 : 0.05)) { const g = Math.floor(Math.random() * 3); scoreA = g; scoreB = g; } 
-  else { scoreB = Math.floor(Math.random() * 3) + 1; scoreA = Math.floor(Math.random() * scoreB); }
-
-  if (cantDraw && scoreA === scoreB) {
-      if(effectiveMode === MODES.RANK) (rankA < rankB) ? scoreA++ : scoreB++;
-      else (Math.random() > 0.5) ? scoreA++ : scoreB++;
+  if (rand < probA) {
+    scoreA = Math.floor(Math.random() * 3) + 1; 
+    scoreB = Math.floor(Math.random() * scoreA);
+  } else if (!cantDraw && rand > probA + (mode === MODES.RANK ? 0 : 0.05)) {
+    const goals = Math.floor(Math.random() * 3);
+    scoreA = goals; scoreB = goals;
+  } else {
+    scoreB = Math.floor(Math.random() * 3) + 1;
+    scoreA = Math.floor(Math.random() * scoreB);
   }
 
-  if (effectiveMode === MODES.RANK) {
+  if (cantDraw && scoreA === scoreB) {
+      if(mode === MODES.RANK) {
+          if(rankA < rankB) scoreA++; else scoreB++;
+      } else {
+          if(Math.random() > 0.5) scoreA++; else scoreB++;
+      }
+  }
+
+  if (mode === MODES.RANK) {
      if (rankA < rankB) { scoreA=Math.max(scoreA, scoreB+1); scoreB=Math.min(scoreB, scoreA-1); }
      else { scoreB=Math.max(scoreB, scoreA+1); scoreA=Math.min(scoreA, scoreB-1); }
   }
 
-  return { team1: teamA, team2: teamB, score1: scoreA, score2: scoreB, winner: scoreA > scoreB ? teamA : teamB };
+  return { 
+      team1: teamA, team2: teamB, 
+      score1: scoreA, score2: scoreB, 
+      winner: scoreA > scoreB ? teamA : teamB 
+  };
 };
 
 // --- COMPONENTS ---
 
-const TeamWithFlag = ({ name, className, big }) => {
+const TeamWithFlag = ({ name, className }) => {
     const iso = TEAM_DATA[name]?.iso;
     return (
         <div className={`flex items-center gap-2 ${className}`}>
-            {iso && <img src={getFlag(iso)} alt={name} className={`${big ? 'w-8 h-6' : 'w-5 h-3.5'} shadow-sm object-cover rounded-[1px]`} />}
-            <span className={`truncate ${big ? 'text-lg' : ''}`}>{name || (big ? 'A definir' : '...')}</span>
+            {iso && <img src={getFlag(iso)} alt={name} className="w-5 h-3.5 shadow-sm object-cover rounded-[1px]" />}
+            <span className="truncate">{name}</span>
         </div>
     );
 };
@@ -117,97 +126,26 @@ const MatchMini = ({ match }) => (
     </div>
 );
 
-const InteractiveMatchCard = ({ match, isFinal, onPick, onSelectTeam, isManual }) => {
+const MatchCard = ({ match, isFinal }) => {
   if (!match) return null;
-  
-  // En manual, si tenemos source (opciones) pero no equipo, mostramos selector
-  const showSelector1 = isManual && match.source1 && !match.team1;
-  const showSelector2 = isManual && match.source2 && !match.team2;
-  const canPickWinner = match.team1 && match.team2;
-
   return (
-    <div className={`relative bg-white p-3 rounded-lg border transition-all duration-200
-        ${isFinal ? 'border-yellow-400 shadow-md ring-1 ring-yellow-100' : 'border-slate-200 shadow-sm'} 
-        ${isManual && (!match.team1 || !match.team2) ? 'ring-2 ring-blue-100' : ''}
-        ${isManual && canPickWinner && !match.winner ? 'ring-2 ring-emerald-400 shadow-md' : ''}
-        mb-2 flex flex-col justify-center min-w-[200px]`}>
-      
+    <div className={`bg-white p-3 rounded-lg border ${isFinal ? 'border-yellow-400 shadow-md ring-1 ring-yellow-100' : 'border-slate-200 shadow-sm'} mb-2 flex flex-col justify-center min-w-[200px]`}>
       <div className="flex justify-between items-center text-xs text-slate-400 font-semibold mb-2 tracking-wider">
          <span>#{match.id}</span>
-         <span className="uppercase truncate max-w-[120px]">{match.stadium}</span>
+         <span className="uppercase">{match.stadium}</span>
       </div>
-
-      {/* Team 1 Area */}
-      {showSelector1 ? (
-         <div className="mb-1">
-             <div className="text-[10px] text-slate-400 uppercase font-bold mb-0.5">{match.label1 || 'Equipo 1'}</div>
-             <div className="relative">
-                <select 
-                    className="w-full text-sm p-1 pr-6 border border-slate-300 rounded appearance-none bg-slate-50 focus:border-emerald-500 focus:outline-none"
-                    onChange={(e) => onSelectTeam(match.id, 'team1', e.target.value)}
-                    value=""
-                >
-                    <option value="" disabled>Seleccionar...</option>
-                    {match.source1.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-                <ChevronDown className="w-3 h-3 text-slate-400 absolute right-2 top-2 pointer-events-none"/>
-             </div>
-         </div>
-      ) : (
-        <div 
-            onClick={() => isManual && canPickWinner && onPick(match.id, match.team1)}
-            className={`flex justify-between items-center mb-1 p-1 rounded cursor-pointer transition-colors
-                ${match.winner === match.team1 ? 'bg-emerald-50' : (isManual && canPickWinner ? 'hover:bg-slate-50' : '')}
-            `}
-        >
-            <div className={`flex items-center gap-2 text-sm font-medium ${match.winner === match.team1 ? 'text-slate-900 font-bold' : 'text-slate-500'}`}>
-                <TeamWithFlag name={match.team1} />
-                {isManual && match.winner === match.team1 && <CheckCircle2 className="w-4 h-4 text-emerald-600" />}
-            </div>
-            <span className={`px-2 py-0.5 rounded text-sm font-bold ${match.winner === match.team1 ? 'bg-emerald-200 text-emerald-900' : 'bg-slate-100 text-slate-800'}`}>
-                {match.score1}
-            </span>
+      <div className="flex justify-between items-center mb-1">
+        <div className={`flex items-center gap-2 text-sm font-medium ${match.winner === match.team1 ? 'text-slate-900 font-bold' : 'text-slate-500'}`}>
+            <TeamWithFlag name={match.team1} />
         </div>
-      )}
-
-      {/* Team 2 Area */}
-      {showSelector2 ? (
-         <div>
-             <div className="text-[10px] text-slate-400 uppercase font-bold mb-0.5">{match.label2 || 'Equipo 2'}</div>
-             <div className="relative">
-                <select 
-                    className="w-full text-sm p-1 pr-6 border border-slate-300 rounded appearance-none bg-slate-50 focus:border-emerald-500 focus:outline-none"
-                    onChange={(e) => onSelectTeam(match.id, 'team2', e.target.value)}
-                    value=""
-                >
-                    <option value="" disabled>Seleccionar...</option>
-                    {match.source2.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-                <ChevronDown className="w-3 h-3 text-slate-400 absolute right-2 top-2 pointer-events-none"/>
-             </div>
-         </div>
-      ) : (
-        <div 
-            onClick={() => isManual && canPickWinner && onPick(match.id, match.team2)}
-            className={`flex justify-between items-center p-1 rounded cursor-pointer transition-colors
-                ${match.winner === match.team2 ? 'bg-emerald-50' : (isManual && canPickWinner ? 'hover:bg-slate-50' : '')}
-            `}
-        >
-            <div className={`flex items-center gap-2 text-sm font-medium ${match.winner === match.team2 ? 'text-slate-900 font-bold' : 'text-slate-500'}`}>
-                <TeamWithFlag name={match.team2} />
-                {isManual && match.winner === match.team2 && <CheckCircle2 className="w-4 h-4 text-emerald-600" />}
-            </div>
-            <span className={`px-2 py-0.5 rounded text-sm font-bold ${match.winner === match.team2 ? 'bg-emerald-200 text-emerald-900' : 'bg-slate-100 text-slate-800'}`}>
-                {match.score2}
-            </span>
+        <span className="bg-slate-100 px-2 py-0.5 rounded text-sm font-bold text-slate-800">{match.score1}</span>
+      </div>
+      <div className="flex justify-between items-center">
+        <div className={`flex items-center gap-2 text-sm font-medium ${match.winner === match.team2 ? 'text-slate-900 font-bold' : 'text-slate-500'}`}>
+            <TeamWithFlag name={match.team2} />
         </div>
-      )}
-      
-      {isManual && canPickWinner && !match.winner && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-0 hover:opacity-100">
-              <span className="bg-slate-800/80 text-white text-xs px-2 py-1 rounded shadow-lg backdrop-blur">Click ganador</span>
-          </div>
-      )}
+        <span className="bg-slate-100 px-2 py-0.5 rounded text-sm font-bold text-slate-800">{match.score2}</span>
+      </div>
     </div>
   );
 };
@@ -249,131 +187,12 @@ export default function App() {
   const [simMode, setSimMode] = useState(MODES.RANK);
   const [simulation, setSimulation] = useState(null);
   const [activeTab, setActiveTab] = useState('playoffs');
-  const [isManualMode, setIsManualMode] = useState(false);
-  const [manualBracket, setManualBracket] = useState({}); 
-
-  useEffect(() => {
-    const script = document.createElement('script');
-    script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
-    script.async = true;
-    document.body.appendChild(script);
-    return () => { document.body.removeChild(script); }
-  }, []);
-
-  const downloadImage = () => {
-    if (!window.html2canvas) { alert("Cargando librería..."); return; }
-    const element = document.getElementById('bracket-export');
-    window.html2canvas(element, { backgroundColor: "#f8fafc", scale: 2 }).then(canvas => {
-        const link = document.createElement('a');
-        link.download = `Mundial2026_Pronostico.png`;
-        link.href = canvas.toDataURL();
-        link.click();
-    });
-  };
-
-  const updateManualBracketState = (newBracket, matchId, updates) => {
-      // Helper to find and update match deep in structure
-      const keys = ['r32', 'r16', 'qf', 'sf', 'final'];
-      let found = false;
-      
-      // Check arrays
-      for (const k of keys) {
-          const arr = newBracket[k];
-          const idx = arr.findIndex(m => m.id === matchId);
-          if (idx !== -1) {
-              arr[idx] = { ...arr[idx], ...updates };
-              found = true;
-              break;
-          }
-      }
-      // Check third place (object)
-      if (!found && newBracket.third.id === matchId) {
-          newBracket.third = { ...newBracket.third, ...updates };
-          found = true;
-      }
-      return found;
-  };
-
-  const handleManualSelect = (matchId, slot, teamName) => {
-      if (!isManualMode) return;
-      const newBracket = { ...manualBracket }; // Shallow copy structure
-      // Deep copy arrays to allow mutation (simplified for brevity, ideally deep clone)
-      newBracket.r32 = [...newBracket.r32];
-      
-      const r32Idx = newBracket.r32.findIndex(m => m.id === matchId);
-      if (r32Idx !== -1) {
-          newBracket.r32[r32Idx] = { ...newBracket.r32[r32Idx], [slot]: teamName };
-          // Reset winner if team changed
-          newBracket.r32[r32Idx].winner = null;
-          newBracket.r32[r32Idx].score1 = '';
-          newBracket.r32[r32Idx].score2 = '';
-      }
-      setManualBracket(newBracket);
-  };
-
-  const handleManualPick = (matchId, winnerName) => {
-      if (!isManualMode) return;
-      const newBracket = JSON.parse(JSON.stringify(manualBracket)); // Deep clone for safety
-      
-      const findMatch = (id) => {
-          for (const k of ['r32', 'r16', 'qf', 'sf', 'final']) {
-              const m = newBracket[k].find(x => x.id === id);
-              if (m) return m;
-          }
-          if (newBracket.third.id === id) return newBracket.third;
-          return null;
-      };
-
-      const match = findMatch(matchId);
-      if (!match) return;
-
-      match.winner = winnerName;
-      if (winnerName === match.team1) { match.score1 = '✔'; match.score2 = ''; } 
-      else { match.score1 = ''; match.score2 = '✔'; }
-
-      // Propagate
-      const mapInfo = NEXT_MATCH_MAP[matchId];
-      if (mapInfo) {
-          const nextMatch = findMatch(mapInfo.next);
-          if (nextMatch) {
-              nextMatch.winner = null; 
-              nextMatch.score1 = ''; nextMatch.score2 = '';
-              nextMatch[mapInfo.slot] = winnerName;
-              
-              // Clear subsequent
-              const clearFuture = (mId) => {
-                  const info = NEXT_MATCH_MAP[mId];
-                  if(info) {
-                      const fM = findMatch(info.next);
-                      if(fM) {
-                          fM[info.slot] = null;
-                          fM.winner = null;
-                          fM.score1 = ''; fM.score2 = '';
-                          clearFuture(fM.id);
-                      }
-                  }
-              };
-              clearFuture(nextMatch.id);
-          }
-          
-          if (mapInfo.loserNext) {
-               const loserName = winnerName === match.team1 ? match.team2 : match.team1;
-               const thirdMatch = newBracket.third; // Explicitly handled
-               if(thirdMatch.id === mapInfo.loserNext) {
-                   thirdMatch[mapInfo.loserSlot] = loserName;
-                   thirdMatch.winner = null;
-                   thirdMatch.score1 = ''; thirdMatch.score2 = '';
-               }
-          }
-      }
-      setManualBracket(newBracket);
-  };
 
   const runSimulation = () => {
+    // 0. SIMULATE PLAYOFFS
     let playoffResults = {};
     let qualifiedTeams = {}; 
 
-    // Helper to simulate brackets
     const runUefaBracket = (key, teams) => {
         const semi1 = simulateMatch(teams[0], teams[3], simMode, true);
         const semi2 = simulateMatch(teams[1], teams[2], simMode, true);
@@ -381,6 +200,7 @@ export default function App() {
         playoffResults[key] = { name: PLAYOFF_STRUCTURE[key].name, matches: [semi1, semi2, final], winner: final.winner };
         return final.winner;
     };
+
     const runInterLadder = (key, teams) => {
         const semi = simulateMatch(teams[1], teams[2], simMode, true);
         const final = simulateMatch(teams[0], semi.winner, simMode, true);
@@ -395,7 +215,7 @@ export default function App() {
     qualifiedTeams['inter_a'] = runInterLadder('inter_a', PLAYOFF_STRUCTURE.inter_a.teams);
     qualifiedTeams['inter_b'] = runInterLadder('inter_b', PLAYOFF_STRUCTURE.inter_b.teams);
 
-    // 1. GROUPS Definitions
+    // 1. CONSTRUCT GROUPS
     const GROUPS = [
         { name: 'A', teams: ['México', 'Sudáfrica', 'República de Corea', qualifiedTeams['uefa_d']] },
         { name: 'B', teams: ['Canadá', qualifiedTeams['uefa_a'], 'Catar', 'Suiza'] },
@@ -411,18 +231,13 @@ export default function App() {
         { name: 'L', teams: ['Inglaterra', 'Croacia', 'Ghana', 'Panamá'] },
     ];
 
-    // Helper for Manual Mode: Get all teams in a group
-    const getGroupTeams = (gName) => GROUPS.find(g => g.name === gName)?.teams || [];
-    // Helper for Manual Mode: Get teams from multiple groups
-    const getMultiGroupTeams = (str) => {
-        const keys = str.split('');
-        let teams = [];
-        keys.forEach(k => teams.push(...getGroupTeams(k)));
-        return teams;
-    };
-
+    // 2. GROUP STAGE SIM
     let groupResults = {};
-    GROUPS.forEach(g => { groupResults[g.name] = g.teams.map(t => ({ name: t, points: 0, gf: 0, ga: 0, wins: 0, draws: 0, losses: 0, group: g.name })); });
+    GROUPS.forEach(g => {
+      groupResults[g.name] = g.teams.map(t => ({
+        name: t, points: 0, gf: 0, ga: 0, wins: 0, draws: 0, losses: 0, group: g.name
+      }));
+    });
 
     GROUPS.forEach(g => {
       const teams = g.teams;
@@ -430,13 +245,16 @@ export default function App() {
         for (let j = i + 1; j < teams.length; j++) {
           const t1 = teams[i]; const t2 = teams[j];
           const result = simulateMatch(t1, t2, simMode, false);
-          const s1 = groupResults[g.name].find(t => t.name === t1);
-          const s2 = groupResults[g.name].find(t => t.name === t2);
-          s1.gf += result.score1; s1.ga += result.score2;
-          s2.gf += result.score2; s2.ga += result.score1;
-          if (result.score1 > result.score2) { s1.points += 3; s1.wins++; s2.losses++; }
-          else if (result.score2 > result.score1) { s2.points += 3; s2.wins++; s1.losses++; }
-          else { s1.points += 1; s2.points += 1; s1.draws++; s2.draws++; }
+          
+          const stats1 = groupResults[g.name].find(t => t.name === t1);
+          const stats2 = groupResults[g.name].find(t => t.name === t2);
+
+          stats1.gf += result.score1; stats1.ga += result.score2;
+          stats2.gf += result.score2; stats2.ga += result.score1;
+
+          if (result.score1 > result.score2) { stats1.points += 3; stats1.wins++; stats2.losses++; }
+          else if (result.score2 > result.score1) { stats2.points += 3; stats2.wins++; stats1.losses++; }
+          else { stats1.points += 1; stats2.points += 1; stats1.draws++; stats2.draws++; }
         }
       }
       groupResults[g.name].sort((a, b) => {
@@ -445,7 +263,7 @@ export default function App() {
       });
     });
 
-    // AUTO Helpers
+    // 3. QUALIFIERS LOGIC
     const getPos = (groupName, pos) => groupResults[groupName][pos - 1].name;
     let thirdPlaces = [];
     GROUPS.forEach(g => thirdPlaces.push({ ...groupResults[g.name][2], group: g.name }));
@@ -454,121 +272,96 @@ export default function App() {
         return (b.gf - b.ga) - (a.gf - a.ga);
     });
     const best8Thirds = thirdPlaces.slice(0, 8);
+    
     let usedThirds = [];
-    const get3rd = (allowed, used) => {
-        const allowList = allowed.split('');
-        let c = best8Thirds.find(t => allowList.includes(t.group) && !used.includes(t.name));
-        if (!c) c = best8Thirds.find(t => !used.includes(t.name));
-        if (c) { used.push(c.name); return c.name; }
+    const get3rd = (allowedGroups, usedTeams) => {
+        const allowed = allowedGroups.split('');
+        let candidate = best8Thirds.find(t => allowed.includes(t.group) && !usedTeams.includes(t.name));
+        if (!candidate) candidate = best8Thirds.find(t => !usedTeams.includes(t.name));
+        if (candidate) { usedTeams.push(candidate.name); return candidate.name; }
         return "TBD"; 
     };
 
-    // R32 Defs with Source Info
-    const r32Structure = [
-        { id: 73, s1: {t: 'pos', g: 'A'}, s2: {t: 'pos', g: 'B'}, label1: '2º A', label2: '2º B', stadium: 'LA Stadium' },
-        { id: 74, s1: {t: 'pos', g: 'E', p: 1}, s2: {t: '3rd', g: 'ABCD F'}, label1: '1º E', label2: '3º A/B/C/D/F', stadium: 'Boston' },
-        { id: 75, s1: {t: 'pos', g: 'F', p: 1}, s2: {t: 'pos', g: 'C'}, label1: '1º F', label2: '2º C', stadium: 'Monterrey' },
-        { id: 76, s1: {t: 'pos', g: 'C', p: 1}, s2: {t: 'pos', g: 'F'}, label1: '1º C', label2: '2º F', stadium: 'Houston' },
-        { id: 77, s1: {t: 'pos', g: 'I', p: 1}, s2: {t: '3rd', g: 'CD FGH'}, label1: '1º I', label2: '3º C/D/F/G/H', stadium: 'NY/NJ' },
-        { id: 78, s1: {t: 'pos', g: 'E'}, s2: {t: 'pos', g: 'I'}, label1: '2º E', label2: '2º I', stadium: 'Dallas' },
-        { id: 79, s1: {t: 'pos', g: 'A', p: 1}, s2: {t: '3rd', g: 'C E FHI'}, label1: '1º A', label2: '3º C/E/F/H/I', stadium: 'CDMX' },
-        { id: 80, s1: {t: 'pos', g: 'L', p: 1}, s2: {t: '3rd', g: 'EHIJK'}, label1: '1º L', label2: '3º E/H/I/J/K', stadium: 'Atlanta' },
-        { id: 81, s1: {t: 'pos', g: 'D', p: 1}, s2: {t: '3rd', g: 'BEFIJ'}, label1: '1º D', label2: '3º B/E/F/I/J', stadium: 'SF Bay Area' },
-        { id: 82, s1: {t: 'pos', g: 'G', p: 1}, s2: {t: '3rd', g: 'AEHIJ'}, label1: '1º G', label2: '3º A/E/H/I/J', stadium: 'Seattle' },
-        { id: 83, s1: {t: 'pos', g: 'K'}, s2: {t: 'pos', g: 'L'}, label1: '2º K', label2: '2º L', stadium: 'Toronto' },
-        { id: 84, s1: {t: 'pos', g: 'H', p: 1}, s2: {t: 'pos', g: 'J'}, label1: '1º H', label2: '2º J', stadium: 'LA Stadium' },
-        { id: 85, s1: {t: 'pos', g: 'B', p: 1}, s2: {t: '3rd', g: 'EFGIJ'}, label1: '1º B', label2: '3º E/F/G/I/J', stadium: 'Vancouver' },
-        { id: 86, s1: {t: 'pos', g: 'J', p: 1}, s2: {t: 'pos', g: 'H'}, label1: '1º J', label2: '2º H', stadium: 'Miami' },
-        { id: 87, s1: {t: 'pos', g: 'K', p: 1}, s2: {t: '3rd', g: 'DEIJL'}, label1: '1º K', label2: '3º D/E/I/J/L', stadium: 'Kansas City' },
-        { id: 88, s1: {t: 'pos', g: 'D'}, s2: {t: 'pos', g: 'G'}, label1: '2º D', label2: '2º G', stadium: 'Dallas' }
+    // 4. FINAL STAGE FIXTURE
+    const r32Defs = [
+        { id: 73, t1: getPos('A', 2), t2: getPos('B', 2), stadium: 'LA Stadium' },
+        { id: 74, t1: getPos('E', 1), t2: get3rd('ABCD F', usedThirds), stadium: 'Boston' },
+        { id: 75, t1: getPos('F', 1), t2: getPos('C', 2), stadium: 'Monterrey' },
+        { id: 76, t1: getPos('C', 1), t2: getPos('F', 2), stadium: 'Houston' },
+        { id: 77, t1: getPos('I', 1), t2: get3rd('CD FGH', usedThirds), stadium: 'NY/NJ' },
+        { id: 78, t1: getPos('E', 2), t2: getPos('I', 2), stadium: 'Dallas' },
+        { id: 79, t1: getPos('A', 1), t2: get3rd('C E FHI', usedThirds), stadium: 'CDMX' },
+        { id: 80, t1: getPos('L', 1), t2: get3rd('EHIJK', usedThirds), stadium: 'Atlanta' },
+        { id: 81, t1: getPos('D', 1), t2: get3rd('BEFIJ', usedThirds), stadium: 'SF Bay Area' },
+        { id: 82, t1: getPos('G', 1), t2: get3rd('AEHIJ', usedThirds), stadium: 'Seattle' },
+        { id: 83, t1: getPos('K', 2), t2: getPos('L', 2), stadium: 'Toronto' },
+        { id: 84, t1: getPos('H', 1), t2: getPos('J', 2), stadium: 'LA Stadium' },
+        { id: 85, t1: getPos('B', 1), t2: get3rd('EFGIJ', usedThirds), stadium: 'Vancouver' },
+        { id: 86, t1: getPos('J', 1), t2: getPos('H', 2), stadium: 'Miami' },
+        { id: 87, t1: getPos('K', 1), t2: get3rd('DEIJL', usedThirds), stadium: 'Kansas City' },
+        { id: 88, t1: getPos('D', 2), t2: getPos('G', 2), stadium: 'Dallas' }
     ];
 
-    // Build R32
-    let r32Matches = r32Structure.map(d => {
-        let t1, t2;
-        let source1, source2;
-
-        if (simMode === MODES.MANUAL) {
-            // In manual, we don't pick, we provide options
-            t1 = null; t2 = null;
-            source1 = d.s1.t === '3rd' ? getMultiGroupTeams(d.s1.g.replace(' ','')) : getGroupTeams(d.s1.g);
-            source2 = d.s2.t === '3rd' ? getMultiGroupTeams(d.s2.g.replace(' ','')) : getGroupTeams(d.s2.g);
-        } else {
-            // Auto
-            t1 = d.s1.t === '3rd' ? get3rd(d.s1.g, usedThirds) : getPos(d.s1.g, d.s1.p || 2);
-            t2 = d.s2.t === '3rd' ? get3rd(d.s2.g, usedThirds) : getPos(d.s2.g, d.s2.p || 2);
-        }
-
-        const res = simulateMatch(t1, t2, simMode, true);
-        return { 
-            id: d.id, stadium: d.stadium, 
-            team1: t1, team2: t2, 
-            score1: res.score1, score2: res.score2, winner: res.winner,
-            // Manual props
-            label1: d.label1, label2: d.label2,
-            source1: source1, source2: source2 
-        };
+    let r32Matches = r32Defs.map(d => {
+        const res = simulateMatch(d.t1, d.t2, simMode, true);
+        return { ...d, team1: d.t1, team2: d.t2, score1: res.score1, score2: res.score2, winner: res.winner };
     });
 
-    // Helper for next rounds
-    const getW = (matches, id) => matches.find(m => m.id === id)?.winner;
-    
-    // R16
+    const getW = (id) => r32Matches.find(m => m.id === id).winner;
+
     const r16Defs = [
-        { id: 89, s1: 74, s2: 77, stadium: 'Philadelphia' }, { id: 90, s1: 73, s2: 75, stadium: 'Houston' },
-        { id: 91, s1: 76, s2: 78, stadium: 'NY/NJ' }, { id: 92, s1: 79, s2: 80, stadium: 'Azteca' },
-        { id: 93, s1: 83, s2: 84, stadium: 'Dallas' }, { id: 94, s1: 81, s2: 82, stadium: 'Seattle' },
-        { id: 95, s1: 86, s2: 88, stadium: 'Atlanta' }, { id: 96, s1: 85, s2: 87, stadium: 'Vancouver' }
+        { id: 89, t1: getW(74), t2: getW(77), stadium: 'Philadelphia' },
+        { id: 90, t1: getW(73), t2: getW(75), stadium: 'Houston' },
+        { id: 91, t1: getW(76), t2: getW(78), stadium: 'NY/NJ' },
+        { id: 92, t1: getW(79), t2: getW(80), stadium: 'Azteca' },
+        { id: 93, t1: getW(83), t2: getW(84), stadium: 'Dallas' },
+        { id: 94, t1: getW(81), t2: getW(82), stadium: 'Seattle' },
+        { id: 95, t1: getW(86), t2: getW(88), stadium: 'Atlanta' },
+        { id: 96, t1: getW(85), t2: getW(87), stadium: 'Vancouver' }
     ];
-    let r16 = r16Defs.map(d => ({ ...simulateMatch(getW(r32Matches, d.s1), getW(r32Matches, d.s2), simMode, true), ...d }));
 
-    // QF
+    let r16Matches = r16Defs.map(d => {
+        const res = simulateMatch(d.t1, d.t2, simMode, true);
+        return { ...d, team1: d.t1, team2: d.t2, score1: res.score1, score2: res.score2, winner: res.winner };
+    });
+    const getW16 = (id) => r16Matches.find(m => m.id === id).winner;
+
     const qfDefs = [
-        { id: 97, s1: 89, s2: 90, stadium: 'Boston' }, { id: 98, s1: 93, s2: 94, stadium: 'LA Stadium' },
-        { id: 99, s1: 91, s2: 92, stadium: 'Miami' }, { id: 100, s1: 95, s2: 96, stadium: 'Kansas City' }
+        { id: 97, t1: getW16(89), t2: getW16(90), stadium: 'Boston' },
+        { id: 98, t1: getW16(93), t2: getW16(94), stadium: 'LA Stadium' },
+        { id: 99, t1: getW16(91), t2: getW16(92), stadium: 'Miami' },
+        { id: 100, t1: getW16(95), t2: getW16(96), stadium: 'Kansas City' },
     ];
-    let qf = qfDefs.map(d => ({ ...simulateMatch(getW(r16, d.s1), getW(r16, d.s2), simMode, true), ...d }));
+    let qfMatches = qfDefs.map(d => {
+        const res = simulateMatch(d.t1, d.t2, simMode, true);
+        return { ...d, team1: d.t1, team2: d.t2, score1: res.score1, score2: res.score2, winner: res.winner };
+    });
+    const getWQF = (id) => qfMatches.find(m => m.id === id).winner;
 
-    // SF
     const sfDefs = [
-        { id: 101, s1: 97, s2: 98, stadium: 'Dallas' }, { id: 102, s1: 99, s2: 100, stadium: 'Atlanta' }
+        { id: 101, t1: getWQF(97), t2: getWQF(98), stadium: 'Dallas' },
+        { id: 102, t1: getWQF(99), t2: getWQF(100), stadium: 'Atlanta' },
     ];
-    let sf = sfDefs.map(d => ({ ...simulateMatch(getW(qf, d.s1), getW(qf, d.s2), simMode, true), ...d }));
+    let sfMatches = sfDefs.map(d => {
+        const res = simulateMatch(d.t1, d.t2, simMode, true);
+        return { ...d, team1: d.t1, team2: d.t2, score1: res.score1, score2: res.score2, winner: res.winner, loser: res.winner === d.t1 ? d.t2 : d.t1 };
+    });
+    const getWSF = (id) => sfMatches.find(m => m.id === id).winner;
+    const getLSF = (id) => sfMatches.find(m => m.id === id).loser;
 
-    const getLoser = (matches, id) => { const m = matches.find(x => x.id === id); return m.winner === m.team1 ? m.team2 : m.team1; };
-    
-    const third = { ...simulateMatch(getLoser(sf, 101), getLoser(sf, 102), simMode, true), id: 103, stadium: 'Miami', stage: '3er Puesto' };
-    const final = { ...simulateMatch(getW(sf, 101), getW(sf, 102), simMode, true), id: 104, stadium: 'NY/NJ', stage: 'FINAL' };
+    const thirdMatchRes = simulateMatch(getLSF(101), getLSF(102), simMode, true);
+    const thirdMatch = { id: 103, stage: '3er Puesto', stadium: 'Miami', team1: getLSF(101), team2: getLSF(102), score1: thirdMatchRes.score1, score2: thirdMatchRes.score2, winner: thirdMatchRes.winner };
 
-    const generatedBracket = { r32: r32Matches, r16, qf, sf, third, final: [final] };
+    const finalMatchRes = simulateMatch(getWSF(101), getWSF(102), simMode, true);
+    const finalMatch = { id: 104, stage: 'FINAL', stadium: 'NY/NJ', team1: getWSF(101), team2: getWSF(102), score1: finalMatchRes.score1, score2: finalMatchRes.score2, winner: finalMatchRes.winner };
 
     setSimulation({
       playoffs: playoffResults,
       groups: groupResults,
-      bracket: generatedBracket
+      bracket: { r32: r32Matches, r16: r16Matches, qf: qfMatches, sf: sfMatches, third: thirdMatch, final: finalMatch }
     });
-    
-    if (simMode === MODES.MANUAL) {
-        // Blank bracket for manual: clear next rounds
-        const blankBracket = {
-            r32: generatedBracket.r32, // Contains sources
-            r16: generatedBracket.r16.map(m => ({ ...m, team1: null, team2: null, winner: null, score1: '', score2: '' })),
-            qf: generatedBracket.qf.map(m => ({ ...m, team1: null, team2: null, winner: null, score1: '', score2: '' })),
-            sf: generatedBracket.sf.map(m => ({ ...m, team1: null, team2: null, winner: null, score1: '', score2: '' })),
-            third: { ...generatedBracket.third, team1: null, team2: null, winner: null, score1: '', score2: '' },
-            final: [{ ...generatedBracket.final[0], team1: null, team2: null, winner: null, score1: '', score2: '' }]
-        };
-        setManualBracket(blankBracket);
-        setIsManualMode(true);
-        setActiveTab('bracket');
-    } else {
-        setManualBracket(JSON.parse(JSON.stringify(generatedBracket))); 
-        setIsManualMode(false);
-        setActiveTab('playoffs');
-    }
+    setActiveTab('playoffs');
   };
-
-  const displayBracket = isManualMode ? manualBracket : (simulation?.bracket || {});
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-12">
@@ -579,18 +372,17 @@ export default function App() {
               <Trophy className="w-10 h-10 text-yellow-400" />
               <div>
                 <h1 className="text-2xl font-bold tracking-tight">Mundial 2026 Simulator</h1>
-                <p className="text-emerald-200 text-sm">48 Equipos | Simulación & Prode Interactivo</p>
+                <p className="text-emerald-200 text-sm">48 Equipos | Simulación Completa (Playoffs Incluidos)</p>
               </div>
             </div>
-            <div className="flex flex-wrap gap-2 bg-emerald-900/50 p-1 rounded-lg backdrop-blur-sm">
-               <button onClick={() => setSimMode(MODES.RANK)} className={`px-3 py-1.5 rounded text-xs md:text-sm font-medium transition-all ${simMode === MODES.RANK ? 'bg-white text-emerald-900 shadow' : 'text-emerald-100 hover:bg-emerald-800'}`}><Shield className="w-3 h-3 inline mr-1" />Ranking</button>
-               <button onClick={() => setSimMode(MODES.SURPRISE)} className={`px-3 py-1.5 rounded text-xs md:text-sm font-medium transition-all ${simMode === MODES.SURPRISE ? 'bg-white text-emerald-900 shadow' : 'text-emerald-100 hover:bg-emerald-800'}`}><Shuffle className="w-3 h-3 inline mr-1" />Sorpresa</button>
-               <button onClick={() => setSimMode(MODES.RANDOM)} className={`px-3 py-1.5 rounded text-xs md:text-sm font-medium transition-all ${simMode === MODES.RANDOM ? 'bg-white text-emerald-900 shadow' : 'text-emerald-100 hover:bg-emerald-800'}`}><RefreshCw className="w-3 h-3 inline mr-1" />Azar</button>
-               <button onClick={() => setSimMode(MODES.MANUAL)} className={`px-3 py-1.5 rounded text-xs md:text-sm font-bold transition-all border border-emerald-400/50 ${simMode === MODES.MANUAL ? 'bg-emerald-400 text-emerald-900 shadow' : 'text-emerald-50 hover:bg-emerald-800'}`}><Pencil className="w-3 h-3 inline mr-1" />Pronóstico</button>
+            <div className="flex bg-emerald-900/50 p-1 rounded-lg backdrop-blur-sm">
+               <button onClick={() => setSimMode(MODES.RANK)} className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${simMode === MODES.RANK ? 'bg-white text-emerald-900 shadow' : 'text-emerald-100 hover:bg-emerald-800'}`}><Shield className="w-4 h-4 inline mr-2" />Ranking</button>
+               <button onClick={() => setSimMode(MODES.SURPRISE)} className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${simMode === MODES.SURPRISE ? 'bg-white text-emerald-900 shadow' : 'text-emerald-100 hover:bg-emerald-800'}`}><Shuffle className="w-4 h-4 inline mr-2" />Sorpresas</button>
+               <button onClick={() => setSimMode(MODES.RANDOM)} className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${simMode === MODES.RANDOM ? 'bg-white text-emerald-900 shadow' : 'text-emerald-100 hover:bg-emerald-800'}`}><RefreshCw className="w-4 h-4 inline mr-2" />Aleatorio</button>
             </div>
           </div>
           <div className="mt-6 flex justify-center">
-            <button onClick={runSimulation} className="bg-yellow-400 hover:bg-yellow-300 text-yellow-900 px-8 py-3 rounded-full font-bold shadow-lg transform hover:scale-105 transition-all flex items-center gap-2"><Play className="w-5 h-5" fill="currentColor" />{simulation ? 'Reiniciar' : 'Comenzar'}</button>
+            <button onClick={runSimulation} className="bg-yellow-400 hover:bg-yellow-300 text-yellow-900 px-8 py-3 rounded-full font-bold shadow-lg transform hover:scale-105 transition-all flex items-center gap-2"><Play className="w-5 h-5" fill="currentColor" />{simulation ? 'Reiniciar Simulación' : 'Comenzar Torneo'}</button>
           </div>
         </div>
       </header>
@@ -599,48 +391,29 @@ export default function App() {
         {!simulation && (
           <div className="text-center py-20 text-slate-400">
             <Trophy className="w-24 h-24 mx-auto mb-4 opacity-20" />
-            <p className="text-xl">Elige un modo y presiona "Comenzar" para generar el torneo.</p>
+            <p className="text-xl">Selecciona un modo y presiona "Comenzar Torneo"</p>
           </div>
         )}
 
         {simulation && (
           <>
-            <div className="flex flex-col md:flex-row border-b border-slate-200 mb-6 gap-2 md:gap-0">
-              <div className="flex overflow-x-auto">
-                <button onClick={() => setActiveTab('playoffs')} className={`px-4 py-3 font-medium text-sm whitespace-nowrap ${activeTab === 'playoffs' ? 'border-b-2 border-emerald-600 text-emerald-700' : 'text-slate-500'}`}>1. Repechajes</button>
-                <button onClick={() => setActiveTab('groups')} className={`px-4 py-3 font-medium text-sm whitespace-nowrap ${activeTab === 'groups' ? 'border-b-2 border-emerald-600 text-emerald-700' : 'text-slate-500'}`}>2. Grupos</button>
-                <button onClick={() => setActiveTab('bracket')} className={`px-4 py-3 font-medium text-sm whitespace-nowrap ${activeTab === 'bracket' ? 'border-b-2 border-emerald-600 text-emerald-700' : 'text-slate-500'}`}>3. Fase Final</button>
-              </div>
-              
-              {activeTab === 'bracket' && (
-                  <div className="ml-auto flex items-center gap-4 bg-white p-2 rounded-lg border border-slate-200 shadow-sm">
-                      <div className="flex items-center gap-2 cursor-pointer" onClick={() => setIsManualMode(!isManualMode)}>
-                          <div className={`w-10 h-6 rounded-full p-1 transition-colors ${isManualMode ? 'bg-emerald-500' : 'bg-slate-300'}`}>
-                              <div className={`bg-white w-4 h-4 rounded-full shadow-sm transform transition-transform ${isManualMode ? 'translate-x-4' : ''}`} />
-                          </div>
-                          <span className="text-sm font-bold text-slate-700 select-none flex items-center gap-1">
-                              {isManualMode ? <MousePointerClick className="w-4 h-4"/> : null} 
-                              {isManualMode ? 'Modo: Mi Pronóstico' : 'Modo: Automático'}
-                          </span>
-                      </div>
-                      <button onClick={downloadImage} className="text-slate-500 hover:text-emerald-600" title="Descargar Imagen">
-                          <Download className="w-5 h-5" />
-                      </button>
-                  </div>
-              )}
+            <div className="flex border-b border-slate-200 mb-6 overflow-x-auto">
+              <button onClick={() => setActiveTab('playoffs')} className={`px-6 py-3 font-medium text-sm transition-colors whitespace-nowrap ${activeTab === 'playoffs' ? 'border-b-2 border-emerald-600 text-emerald-700' : 'text-slate-500 hover:text-slate-700'}`}>Repechajes y Clasificación</button>
+              <button onClick={() => setActiveTab('groups')} className={`px-6 py-3 font-medium text-sm transition-colors whitespace-nowrap ${activeTab === 'groups' ? 'border-b-2 border-emerald-600 text-emerald-700' : 'text-slate-500 hover:text-slate-700'}`}>Fase de Grupos</button>
+              <button onClick={() => setActiveTab('bracket')} className={`px-6 py-3 font-medium text-sm transition-colors whitespace-nowrap ${activeTab === 'bracket' ? 'border-b-2 border-emerald-600 text-emerald-700' : 'text-slate-500 hover:text-slate-700'}`}>Fase Final</button>
             </div>
 
-            {/* VIEWS */}
             {activeTab === 'playoffs' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-fadeIn">
                     {Object.values(simulation.playoffs).map((p, idx) => (
                         <div key={idx} className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
                             <h3 className="font-bold text-slate-800 mb-3 flex items-center gap-2"><Globe className="w-4 h-4 text-emerald-600"/> {p.name}</h3>
-                             <div className="space-y-2 mb-3">
+                            <div className="space-y-2 mb-3">
                                 {p.matches.map((m, midx) => <MatchMini key={midx} match={m} />)}
                             </div>
                             <div className="bg-emerald-50 text-emerald-800 p-2 rounded text-center text-sm font-bold border border-emerald-100 flex justify-center items-center gap-2">
-                                <span>Clasificado:</span> <TeamWithFlag name={p.winner} />
+                                <span>Clasificado:</span>
+                                <TeamWithFlag name={p.winner} />
                             </div>
                         </div>
                     ))}
@@ -656,57 +429,55 @@ export default function App() {
             )}
 
             {activeTab === 'bracket' && (
-              <div id="bracket-export" className="space-y-8 animate-fadeIn pb-20 bg-slate-50 p-4 rounded-xl">
-                
-                {isManualMode && (
-                    <div className="bg-blue-50 text-blue-800 p-3 rounded-lg text-center text-sm font-medium border border-blue-100 flex items-center justify-center gap-2 animate-pulse">
-                        <MousePointerClick className="w-4 h-4" />
-                        Modo Pronóstico Activo: Elige los equipos en los 16vos y luego haz clic para avanzar ganadores.
-                    </div>
-                )}
-
-                {/* Champion */}
-                <div className="bg-gradient-to-r from-yellow-100 to-amber-100 border border-yellow-200 rounded-2xl p-6 text-center shadow-sm max-w-2xl mx-auto">
-                  <h2 className="text-amber-800 text-xs font-bold uppercase tracking-widest mb-2">Campeón del Mundo 2026</h2>
+              <div className="space-y-12 animate-fadeIn pb-20">
+                <div className="bg-gradient-to-r from-yellow-100 to-amber-100 border border-yellow-200 rounded-2xl p-8 text-center shadow-sm">
+                  <h2 className="text-amber-800 text-sm font-bold uppercase tracking-widest mb-2">Campeón del Mundo 2026</h2>
                   <div className="flex flex-col items-center justify-center gap-2">
-                    <Award className="w-12 h-12 text-yellow-500" />
-                    <div className="text-3xl font-black text-slate-900 flex items-center gap-4">
-                       <TeamWithFlag name={displayBracket.final[0]?.winner} big={true} className="text-3xl" />
+                    <Award className="w-12 h-12 md:w-16 md:h-16 text-yellow-500" />
+                    <div className="text-4xl md:text-6xl font-black text-slate-900 flex items-center gap-4">
+                       <TeamWithFlag name={simulation.bracket.final.winner} className="text-4xl md:text-6xl" />
                     </div>
                   </div>
                 </div>
 
-                {/* Final & 3rd */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
                      <div className="flex flex-col items-center">
-                        <h3 className="text-lg font-bold text-slate-800 mb-3 flex items-center gap-2"><Trophy className="w-5 h-5 text-yellow-500"/> La Gran Final</h3>
-                        <div className="w-full max-w-sm">
-                            <InteractiveMatchCard match={displayBracket.final[0]} isFinal={true} onPick={handleManualPick} isManual={isManualMode} onSelectTeam={handleManualSelect} />
-                        </div>
+                        <h3 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2"><Trophy className="w-6 h-6 text-yellow-500"/> La Gran Final</h3>
+                        <div className="w-full max-w-md"><MatchCard match={simulation.bracket.final} isFinal={true} /></div>
                     </div>
                      <div className="flex flex-col items-center">
-                        <h3 className="text-lg font-bold text-slate-600 mb-3 flex items-center gap-2"><Medal className="w-5 h-5 text-amber-600"/> Tercer Puesto</h3>
-                        <div className="w-full max-w-sm">
-                            <InteractiveMatchCard match={displayBracket.third} onPick={handleManualPick} isManual={isManualMode} onSelectTeam={handleManualSelect} />
-                        </div>
+                        <h3 className="text-xl font-bold text-slate-600 mb-4 flex items-center gap-2"><Medal className="w-6 h-6 text-amber-600"/> Tercer Puesto</h3>
+                        <div className="w-full max-w-md"><MatchCard match={simulation.bracket.third} /></div>
                     </div>
                 </div>
 
-                {/* Main Bracket */}
-                <div className="flex flex-col gap-8">
-                    {[{ title: 'Semifinales', data: displayBracket.sf }, { title: 'Cuartos de Final', data: displayBracket.qf }, { title: 'Octavos de Final', data: displayBracket.r16 }, { title: '16vos de Final', data: displayBracket.r32 }].map((round, idx) => (
-                        <div key={idx}>
-                             <h3 className="text-md font-bold text-slate-600 mb-3 border-l-4 border-emerald-500 pl-3">{round.title}</h3>
-                             <div className={`grid gap-3 ${idx === 0 ? 'grid-cols-1 md:grid-cols-2' : (idx === 1 ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4')}`}>
-                                 {round.data.map(m => (
-                                     <InteractiveMatchCard key={m.id} match={m} onPick={handleManualPick} isManual={isManualMode} onSelectTeam={handleManualSelect} />
-                                 ))}
-                             </div>
-                        </div>
-                    ))}
+                <div>
+                    <h3 className="text-lg font-bold text-slate-600 mb-4 border-l-4 border-emerald-500 pl-3">Semifinales</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {simulation.bracket.sf.map(m => <MatchCard key={m.id} match={m} />)}
+                    </div>
                 </div>
-                
-                <div className="text-center text-slate-400 text-xs mt-8">Generado con Simulador Mundial 2026</div>
+
+                <div>
+                    <h3 className="text-lg font-bold text-slate-600 mb-4 border-l-4 border-emerald-500 pl-3">Cuartos de Final</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {simulation.bracket.qf.map(m => <MatchCard key={m.id} match={m} />)}
+                    </div>
+                </div>
+
+                <div>
+                    <h3 className="text-lg font-bold text-slate-600 mb-4 border-l-4 border-emerald-500 pl-3">Octavos de Final</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {simulation.bracket.r16.map(m => <MatchCard key={m.id} match={m} />)}
+                    </div>
+                </div>
+
+                <div>
+                    <h3 className="text-lg font-bold text-slate-600 mb-4 border-l-4 border-emerald-500 pl-3">16vos de Final (Ronda de 32)</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {simulation.bracket.r32.map(m => <MatchCard key={m.id} match={m} />)}
+                    </div>
+                </div>
               </div>
             )}
           </>
