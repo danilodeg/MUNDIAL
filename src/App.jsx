@@ -117,10 +117,9 @@ const MatchMini = ({ match }) => (
     </div>
 );
 
-const InteractiveMatchCard = ({ match, isFinal, onPick, onSelectTeam, isManual }) => {
+const InteractiveMatchCard = ({ match, isFinal, onPick, onSelectTeam, isManual, selectedTeams = [] }) => {
   if (!match) return null;
   
-  // En manual, si tenemos source (opciones) pero no equipo, mostramos selector
   const showSelector1 = isManual && match.source1 && !match.team1;
   const showSelector2 = isManual && match.source2 && !match.team2;
   const canPickWinner = match.team1 && match.team2;
@@ -148,7 +147,14 @@ const InteractiveMatchCard = ({ match, isFinal, onPick, onSelectTeam, isManual }
                     value=""
                 >
                     <option value="" disabled>Seleccionar...</option>
-                    {match.source1.map(t => <option key={t} value={t}>{t}</option>)}
+                    {match.source1.map(t => {
+                        const isDisabled = selectedTeams.includes(t) && t !== match.team1;
+                        return (
+                            <option key={t} value={t} disabled={isDisabled}>
+                                {t} {isDisabled ? '(Ya elegido)' : ''}
+                            </option>
+                        );
+                    })}
                 </select>
                 <ChevronDown className="w-3 h-3 text-slate-400 absolute right-2 top-2 pointer-events-none"/>
              </div>
@@ -181,7 +187,14 @@ const InteractiveMatchCard = ({ match, isFinal, onPick, onSelectTeam, isManual }
                     value=""
                 >
                     <option value="" disabled>Seleccionar...</option>
-                    {match.source2.map(t => <option key={t} value={t}>{t}</option>)}
+                    {match.source2.map(t => {
+                        const isDisabled = selectedTeams.includes(t) && t !== match.team2;
+                        return (
+                            <option key={t} value={t} disabled={isDisabled}>
+                                {t} {isDisabled ? '(Ya elegido)' : ''}
+                            </option>
+                        );
+                    })}
                 </select>
                 <ChevronDown className="w-3 h-3 text-slate-400 absolute right-2 top-2 pointer-events-none"/>
              </div>
@@ -271,39 +284,16 @@ export default function App() {
     });
   };
 
-  const updateManualBracketState = (newBracket, matchId, updates) => {
-      // Helper to find and update match deep in structure
-      const keys = ['r32', 'r16', 'qf', 'sf', 'final'];
-      let found = false;
-      
-      // Check arrays
-      for (const k of keys) {
-          const arr = newBracket[k];
-          const idx = arr.findIndex(m => m.id === matchId);
-          if (idx !== -1) {
-              arr[idx] = { ...arr[idx], ...updates };
-              found = true;
-              break;
-          }
-      }
-      // Check third place (object)
-      if (!found && newBracket.third.id === matchId) {
-          newBracket.third = { ...newBracket.third, ...updates };
-          found = true;
-      }
-      return found;
-  };
-
   const handleManualSelect = (matchId, slot, teamName) => {
       if (!isManualMode) return;
-      const newBracket = { ...manualBracket }; // Shallow copy structure
-      // Deep copy arrays to allow mutation (simplified for brevity, ideally deep clone)
-      newBracket.r32 = [...newBracket.r32];
+      const newBracket = { ...manualBracket };
+      // Deep copy r32 array
+      newBracket.r32 = newBracket.r32.map(m => ({ ...m }));
       
       const r32Idx = newBracket.r32.findIndex(m => m.id === matchId);
       if (r32Idx !== -1) {
           newBracket.r32[r32Idx] = { ...newBracket.r32[r32Idx], [slot]: teamName };
-          // Reset winner if team changed
+          // Reset winner
           newBracket.r32[r32Idx].winner = null;
           newBracket.r32[r32Idx].score1 = '';
           newBracket.r32[r32Idx].score2 = '';
@@ -313,7 +303,7 @@ export default function App() {
 
   const handleManualPick = (matchId, winnerName) => {
       if (!isManualMode) return;
-      const newBracket = JSON.parse(JSON.stringify(manualBracket)); // Deep clone for safety
+      const newBracket = JSON.parse(JSON.stringify(manualBracket)); // Deep clone
       
       const findMatch = (id) => {
           for (const k of ['r32', 'r16', 'qf', 'sf', 'final']) {
@@ -331,7 +321,6 @@ export default function App() {
       if (winnerName === match.team1) { match.score1 = '✔'; match.score2 = ''; } 
       else { match.score1 = ''; match.score2 = '✔'; }
 
-      // Propagate
       const mapInfo = NEXT_MATCH_MAP[matchId];
       if (mapInfo) {
           const nextMatch = findMatch(mapInfo.next);
@@ -340,7 +329,6 @@ export default function App() {
               nextMatch.score1 = ''; nextMatch.score2 = '';
               nextMatch[mapInfo.slot] = winnerName;
               
-              // Clear subsequent
               const clearFuture = (mId) => {
                   const info = NEXT_MATCH_MAP[mId];
                   if(info) {
@@ -358,7 +346,7 @@ export default function App() {
           
           if (mapInfo.loserNext) {
                const loserName = winnerName === match.team1 ? match.team2 : match.team1;
-               const thirdMatch = newBracket.third; // Explicitly handled
+               const thirdMatch = newBracket.third;
                if(thirdMatch.id === mapInfo.loserNext) {
                    thirdMatch[mapInfo.loserSlot] = loserName;
                    thirdMatch.winner = null;
@@ -373,7 +361,6 @@ export default function App() {
     let playoffResults = {};
     let qualifiedTeams = {}; 
 
-    // Helper to simulate brackets
     const runUefaBracket = (key, teams) => {
         const semi1 = simulateMatch(teams[0], teams[3], simMode, true);
         const semi2 = simulateMatch(teams[1], teams[2], simMode, true);
@@ -395,7 +382,6 @@ export default function App() {
     qualifiedTeams['inter_a'] = runInterLadder('inter_a', PLAYOFF_STRUCTURE.inter_a.teams);
     qualifiedTeams['inter_b'] = runInterLadder('inter_b', PLAYOFF_STRUCTURE.inter_b.teams);
 
-    // 1. GROUPS Definitions
     const GROUPS = [
         { name: 'A', teams: ['México', 'Sudáfrica', 'República de Corea', qualifiedTeams['uefa_d']] },
         { name: 'B', teams: ['Canadá', qualifiedTeams['uefa_a'], 'Catar', 'Suiza'] },
@@ -411,9 +397,7 @@ export default function App() {
         { name: 'L', teams: ['Inglaterra', 'Croacia', 'Ghana', 'Panamá'] },
     ];
 
-    // Helper for Manual Mode: Get all teams in a group
     const getGroupTeams = (gName) => GROUPS.find(g => g.name === gName)?.teams || [];
-    // Helper for Manual Mode: Get teams from multiple groups
     const getMultiGroupTeams = (str) => {
         const keys = str.split('');
         let teams = [];
@@ -445,7 +429,6 @@ export default function App() {
       });
     });
 
-    // AUTO Helpers
     const getPos = (groupName, pos) => groupResults[groupName][pos - 1].name;
     let thirdPlaces = [];
     GROUPS.forEach(g => thirdPlaces.push({ ...groupResults[g.name][2], group: g.name }));
@@ -463,7 +446,6 @@ export default function App() {
         return "TBD"; 
     };
 
-    // R32 Defs with Source Info
     const r32Structure = [
         { id: 73, s1: {t: 'pos', g: 'A'}, s2: {t: 'pos', g: 'B'}, label1: '2º A', label2: '2º B', stadium: 'LA Stadium' },
         { id: 74, s1: {t: 'pos', g: 'E', p: 1}, s2: {t: '3rd', g: 'ABCD F'}, label1: '1º E', label2: '3º A/B/C/D/F', stadium: 'Boston' },
@@ -483,18 +465,15 @@ export default function App() {
         { id: 88, s1: {t: 'pos', g: 'D'}, s2: {t: 'pos', g: 'G'}, label1: '2º D', label2: '2º G', stadium: 'Dallas' }
     ];
 
-    // Build R32
     let r32Matches = r32Structure.map(d => {
         let t1, t2;
         let source1, source2;
 
         if (simMode === MODES.MANUAL) {
-            // In manual, we don't pick, we provide options
             t1 = null; t2 = null;
             source1 = d.s1.t === '3rd' ? getMultiGroupTeams(d.s1.g.replace(' ','')) : getGroupTeams(d.s1.g);
             source2 = d.s2.t === '3rd' ? getMultiGroupTeams(d.s2.g.replace(' ','')) : getGroupTeams(d.s2.g);
         } else {
-            // Auto
             t1 = d.s1.t === '3rd' ? get3rd(d.s1.g, usedThirds) : getPos(d.s1.g, d.s1.p || 2);
             t2 = d.s2.t === '3rd' ? get3rd(d.s2.g, usedThirds) : getPos(d.s2.g, d.s2.p || 2);
         }
@@ -504,16 +483,13 @@ export default function App() {
             id: d.id, stadium: d.stadium, 
             team1: t1, team2: t2, 
             score1: res.score1, score2: res.score2, winner: res.winner,
-            // Manual props
             label1: d.label1, label2: d.label2,
             source1: source1, source2: source2 
         };
     });
 
-    // Helper for next rounds
     const getW = (matches, id) => matches.find(m => m.id === id)?.winner;
     
-    // R16
     const r16Defs = [
         { id: 89, s1: 74, s2: 77, stadium: 'Philadelphia' }, { id: 90, s1: 73, s2: 75, stadium: 'Houston' },
         { id: 91, s1: 76, s2: 78, stadium: 'NY/NJ' }, { id: 92, s1: 79, s2: 80, stadium: 'Azteca' },
@@ -522,14 +498,12 @@ export default function App() {
     ];
     let r16 = r16Defs.map(d => ({ ...simulateMatch(getW(r32Matches, d.s1), getW(r32Matches, d.s2), simMode, true), ...d }));
 
-    // QF
     const qfDefs = [
         { id: 97, s1: 89, s2: 90, stadium: 'Boston' }, { id: 98, s1: 93, s2: 94, stadium: 'LA Stadium' },
         { id: 99, s1: 91, s2: 92, stadium: 'Miami' }, { id: 100, s1: 95, s2: 96, stadium: 'Kansas City' }
     ];
     let qf = qfDefs.map(d => ({ ...simulateMatch(getW(r16, d.s1), getW(r16, d.s2), simMode, true), ...d }));
 
-    // SF
     const sfDefs = [
         { id: 101, s1: 97, s2: 98, stadium: 'Dallas' }, { id: 102, s1: 99, s2: 100, stadium: 'Atlanta' }
     ];
@@ -549,9 +523,8 @@ export default function App() {
     });
     
     if (simMode === MODES.MANUAL) {
-        // Blank bracket for manual: clear next rounds
         const blankBracket = {
-            r32: generatedBracket.r32, // Contains sources
+            r32: generatedBracket.r32, 
             r16: generatedBracket.r16.map(m => ({ ...m, team1: null, team2: null, winner: null, score1: '', score2: '' })),
             qf: generatedBracket.qf.map(m => ({ ...m, team1: null, team2: null, winner: null, score1: '', score2: '' })),
             sf: generatedBracket.sf.map(m => ({ ...m, team1: null, team2: null, winner: null, score1: '', score2: '' })),
@@ -569,6 +542,17 @@ export default function App() {
   };
 
   const displayBracket = isManualMode ? manualBracket : (simulation?.bracket || {});
+
+  const getSelectedTeamsR32 = () => {
+      if (!isManualMode || !manualBracket.r32) return [];
+      const teams = [];
+      manualBracket.r32.forEach(m => {
+          if (m.team1) teams.push(m.team1);
+          if (m.team2) teams.push(m.team2);
+      });
+      return teams;
+  };
+  const selectedTeamsR32 = getSelectedTeamsR32();
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-12">
@@ -699,7 +683,14 @@ export default function App() {
                              <h3 className="text-md font-bold text-slate-600 mb-3 border-l-4 border-emerald-500 pl-3">{round.title}</h3>
                              <div className={`grid gap-3 ${idx === 0 ? 'grid-cols-1 md:grid-cols-2' : (idx === 1 ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4')}`}>
                                  {round.data.map(m => (
-                                     <InteractiveMatchCard key={m.id} match={m} onPick={handleManualPick} isManual={isManualMode} onSelectTeam={handleManualSelect} />
+                                     <InteractiveMatchCard 
+                                        key={m.id} 
+                                        match={m} 
+                                        onPick={handleManualPick} 
+                                        isManual={isManualMode} 
+                                        onSelectTeam={handleManualSelect}
+                                        selectedTeams={selectedTeamsR32}
+                                     />
                                  ))}
                              </div>
                         </div>
