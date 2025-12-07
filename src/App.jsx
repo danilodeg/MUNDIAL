@@ -737,7 +737,7 @@ export default function App() {
                 </div>
 
                 {isManualMode && (
-                    <div className="bg-blue-50 text-blue-800 p-3 rounded-lg text-center text-sm font-medium border border-blue-100 flex items-center justify-center gap-2 animate-pulse">
+                    <div className="bg-blue-50 text-blue-800 p-3 rounded-lg text-center text-sm font-medium border border-blue-100 flex items-center justify-center gap-2">
                         <MousePointerClick className="w-4 h-4" />
                         Modo Pronóstico Activo: Elige los equipos en los 16vos y luego haz clic para avanzar ganadores.
                     </div>
