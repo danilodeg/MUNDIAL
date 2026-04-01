@@ -29,13 +29,13 @@ const TEAM_DATA = {
   'Irak': { rank: 58, iso: 'iq' }, 'Bolivia': { rank: 76, iso: 'bo' }, 'Surinam': { rank: 123, iso: 'sr' }
 };
 
-const PLAYOFF_STRUCTURE = {
-    uefa_a: { name: 'UEFA Playoff A', type: 'bracket', teams: ['Italia', 'Irlanda del Norte', 'Gales', 'Bosnia'] }, 
-    uefa_b: { name: 'UEFA Playoff B', type: 'bracket', teams: ['Ucrania', 'Albania', 'Polonia', 'Suecia'] },
-    uefa_c: { name: 'UEFA Playoff C', type: 'bracket', teams: ['Turquía', 'Kosovo', 'Rumania', 'Eslovaquia'] }, 
-    uefa_d: { name: 'UEFA Playoff D', type: 'bracket', teams: ['Dinamarca', 'Macedonia del Norte', 'Rep. Checa', 'Irlanda'] },
-    inter_a: { name: 'Repechaje Inter. A', type: 'ladder', teams: ['RD Congo', 'Jamaica', 'Nueva Caledonia'] }, 
-    inter_b: { name: 'Repechaje Inter. B', type: 'ladder', teams: ['Irak', 'Bolivia', 'Surinam'] }
+const PLAYOFF_WINNERS = {
+    uefa_a: 'Bosnia',
+    uefa_b: 'Suecia',
+    uefa_c: 'Turquía',
+    uefa_d: 'Rep. Checa',
+    inter_a: 'RD Congo',
+    inter_b: 'Irak'
 };
 
 const MODES = { RANK: 'ranking', SURPRISE: 'surprise', RANDOM: 'random', MANUAL: 'manual' };
@@ -261,7 +261,7 @@ const GroupCard = ({ group, standings }) => (
 export default function App() {
   const [simMode, setSimMode] = useState(MODES.RANK);
   const [simulation, setSimulation] = useState(null);
-  const [activeTab, setActiveTab] = useState('playoffs');
+  const [activeTab, setActiveTab] = useState('groups');
   const [isManualMode, setIsManualMode] = useState(false);
   const [manualBracket, setManualBracket] = useState({}); 
   const [showWinnerPopup, setShowWinnerPopup] = useState(false);
@@ -367,42 +367,19 @@ export default function App() {
 
   const runSimulation = () => {
     setShowWinnerPopup(false);
-    let playoffResults = {};
-    let qualifiedTeams = {}; 
-
-    const runUefaBracket = (key, teams) => {
-        const semi1 = simulateMatch(teams[0], teams[3], simMode, true);
-        const semi2 = simulateMatch(teams[1], teams[2], simMode, true);
-        const final = simulateMatch(semi1.winner, semi2.winner, simMode, true);
-        playoffResults[key] = { name: PLAYOFF_STRUCTURE[key].name, matches: [semi1, semi2, final], winner: final.winner };
-        return final.winner;
-    };
-    const runInterLadder = (key, teams) => {
-        const semi = simulateMatch(teams[1], teams[2], simMode, true);
-        const final = simulateMatch(teams[0], semi.winner, simMode, true);
-        playoffResults[key] = { name: PLAYOFF_STRUCTURE[key].name, matches: [semi, final], winner: final.winner };
-        return final.winner;
-    };
-
-    qualifiedTeams['uefa_a'] = runUefaBracket('uefa_a', PLAYOFF_STRUCTURE.uefa_a.teams);
-    qualifiedTeams['uefa_b'] = runUefaBracket('uefa_b', PLAYOFF_STRUCTURE.uefa_b.teams);
-    qualifiedTeams['uefa_c'] = runUefaBracket('uefa_c', PLAYOFF_STRUCTURE.uefa_c.teams);
-    qualifiedTeams['uefa_d'] = runUefaBracket('uefa_d', PLAYOFF_STRUCTURE.uefa_d.teams);
-    qualifiedTeams['inter_a'] = runInterLadder('inter_a', PLAYOFF_STRUCTURE.inter_a.teams);
-    qualifiedTeams['inter_b'] = runInterLadder('inter_b', PLAYOFF_STRUCTURE.inter_b.teams);
 
     const GROUPS = [
-        { name: 'A', teams: ['México', 'Sudáfrica', 'República de Corea', qualifiedTeams['uefa_d']] },
-        { name: 'B', teams: ['Canadá', qualifiedTeams['uefa_a'], 'Catar', 'Suiza'] },
+        { name: 'A', teams: ['México', 'Sudáfrica', 'República de Corea', 'Rep. Checa'] },
+        { name: 'B', teams: ['Canadá', 'Bosnia', 'Catar', 'Suiza'] },
         { name: 'C', teams: ['Brasil', 'Marruecos', 'Haití', 'Escocia'] },
-        { name: 'D', teams: ['Estados Unidos', 'Paraguay', 'Australia', qualifiedTeams['uefa_c']] },
+        { name: 'D', teams: ['Estados Unidos', 'Paraguay', 'Australia', 'Turquía'] },
         { name: 'E', teams: ['Alemania', 'Curazao', 'Costa de Marfil', 'Ecuador'] },
-        { name: 'F', teams: ['Países Bajos', 'Japón', qualifiedTeams['uefa_b'], 'Túnez'] },
+        { name: 'F', teams: ['Países Bajos', 'Japón', 'Suecia', 'Túnez'] },
         { name: 'G', teams: ['Bélgica', 'Egipto', 'Irán', 'Nueva Zelanda'] },
         { name: 'H', teams: ['España', 'Cabo Verde', 'Arabia Saudí', 'Uruguay'] },
-        { name: 'I', teams: ['Francia', 'Senegal', qualifiedTeams['inter_a'], 'Noruega'] },
+        { name: 'I', teams: ['Francia', 'Senegal', 'RD Congo', 'Noruega'] },
         { name: 'J', teams: ['Argentina', 'Argelia', 'Austria', 'Jordania'] },
-        { name: 'K', teams: ['Portugal', qualifiedTeams['inter_b'], 'Uzbekistán', 'Colombia'] },
+        { name: 'K', teams: ['Portugal', 'Irak', 'Uzbekistán', 'Colombia'] },
         { name: 'L', teams: ['Inglaterra', 'Croacia', 'Ghana', 'Panamá'] },
     ];
 
@@ -544,9 +521,9 @@ export default function App() {
         setIsManualMode(true);
         setActiveTab('bracket');
     } else {
-        setManualBracket(JSON.parse(JSON.stringify(generatedBracket))); 
+        setManualBracket(JSON.parse(JSON.stringify(generatedBracket)));
         setIsManualMode(false);
-        setActiveTab('playoffs');
+        setActiveTab('groups');
     }
   };
 
@@ -600,9 +577,8 @@ export default function App() {
           <>
             <div className="flex flex-col md:flex-row border-b border-slate-200 mb-6 gap-2 md:gap-0">
               <div className="flex overflow-x-auto">
-                <button onClick={() => setActiveTab('playoffs')} className={`px-4 py-3 font-medium text-sm whitespace-nowrap ${activeTab === 'playoffs' ? 'border-b-2 border-emerald-600 text-emerald-700' : 'text-slate-500'}`}>1. Repechajes</button>
-                <button onClick={() => setActiveTab('groups')} className={`px-4 py-3 font-medium text-sm whitespace-nowrap ${activeTab === 'groups' ? 'border-b-2 border-emerald-600 text-emerald-700' : 'text-slate-500'}`}>2. Grupos</button>
-                <button onClick={() => setActiveTab('bracket')} className={`px-4 py-3 font-medium text-sm whitespace-nowrap ${activeTab === 'bracket' ? 'border-b-2 border-emerald-600 text-emerald-700' : 'text-slate-500'}`}>3. Fase Final</button>
+                <button onClick={() => setActiveTab('groups')} className={`px-4 py-3 font-medium text-sm whitespace-nowrap ${activeTab === 'groups' ? 'border-b-2 border-emerald-600 text-emerald-700' : 'text-slate-500'}`}>1. Fase de Grupos</button>
+                <button onClick={() => setActiveTab('bracket')} className={`px-4 py-3 font-medium text-sm whitespace-nowrap ${activeTab === 'bracket' ? 'border-b-2 border-emerald-600 text-emerald-700' : 'text-slate-500'}`}>2. Fase Final</button>
               </div>
               
               {activeTab === 'bracket' && (
@@ -624,22 +600,6 @@ export default function App() {
             </div>
 
             {/* VIEWS */}
-            {activeTab === 'playoffs' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-fadeIn">
-                    {Object.values(simulation.playoffs).map((p, idx) => (
-                        <div key={idx} className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-                            <h3 className="font-bold text-slate-800 mb-3 flex items-center gap-2"><Globe className="w-4 h-4 text-emerald-600"/> {p.name}</h3>
-                             <div className="space-y-2 mb-3">
-                                {p.matches.map((m, midx) => <MatchMini key={midx} match={m} />)}
-                            </div>
-                            <div className="bg-emerald-50 text-emerald-800 p-2 rounded text-center text-sm font-bold border border-emerald-100 flex justify-center items-center gap-2">
-                                <span>Clasificado:</span> <TeamWithFlag name={p.winner} />
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
-
             {activeTab === 'groups' && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-fadeIn">
                 {simulation.groups && Object.keys(simulation.groups).map(g => (
